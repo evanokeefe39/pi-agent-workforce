@@ -1,0 +1,65 @@
+// Data Agent Permission Policy
+// Role: data collection, scraping (including browser), database queries, structured extraction.
+// Full executor access plus heavy scraping tools and DuckDB.
+{
+  "defaultPolicy": {
+    "tools": "deny",
+    "bash": "allow",
+    "mcp": "deny",
+    "skills": "allow",
+    "special": "allow"
+  },
+
+  "tools": {
+    "*": "deny",
+
+    // Built-in tools — full executor access
+    "read": "allow",
+    "write": "allow",
+    "edit": "allow",
+    "grep": "allow",
+    "find": "allow",
+    "ls": "allow",
+    "bash": "allow",
+
+    // Scraping tools — full tier access including browser
+    "scrape_static": "allow",
+    "scrape_stealth": "allow",
+    "scrape_browser": "allow",
+    "scrape_apify": "allow",
+    "list_actors": "allow",
+    "scrape_status": "allow",
+
+    // Web tools
+    "web_search": "allow",
+    "web_fetch": "allow",
+
+    // DuckDB — primary data tool
+    "duckdb_query": "allow",
+    "duckdb_import": "allow",
+
+    // Artifacts — full access
+    "write_artifact": "allow",
+    "read_artifact": "allow",
+    "list_artifacts": "allow",
+    "get_template": "allow",
+
+    // Workproduct — data kinds (dataset_ref, query_result, metric, chart)
+    "record_dataset_ref": "allow",
+    "record_query_result": "allow",
+    "record_metric": "allow",
+    "record_chart": "allow",
+    "query_data_products": "allow",
+    "get_data_product": "allow",
+
+    // Escalation
+    "escalate": "allow",
+
+
+
+  },
+
+  "bash": {
+    "*": "allow"
+  }
+}

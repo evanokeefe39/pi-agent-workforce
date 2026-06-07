@@ -1,0 +1,540 @@
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Type, type Static } from "typebox";
+import * as fs from "node:fs";
+import * as path from "node:path";
+
+import { ulid } from "./workproduct-lib/ulid.js";
+import { validateByStyle, type StyleProfiles } from "./workproduct-lib/validate.js";
+import {
+  SourceReliability,
+  InformationCredibility,
+  SourceType,
+  CollectionMethod,
+  Corroboration,
+  SourceSchema,
+} from "./workproduct-lib/schemas.js";
+
+// ---------------------------------------------------------------------------
+// Local filesystem storage helpers
+// ---------------------------------------------------------------------------
+
+const AGENT_NAME = process.env.AGENT_NAME || "unknown";
+
+function getWorkDir(): string {
+  return path.join(process.cwd(), "workproduct", "findings");
+}
+
+function ensureDir(dir: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+interface LocalRecord {
+  id: string;
+  agent: string;
+  type: string;
+  timestamp: string;
+  content: string;
+  metadata: Record<string, unknown>;
+}
+
+function writeLocal(type: string, content: string, metadata: Record<string, unknown>): { id: string } {
+  const dir = getWorkDir();
+  ensureDir(dir);
+  const id = ulid();
+  const record: LocalRecord = {
+    id,
+    agent: AGENT_NAME,
+    type,
+    timestamp: new Date().toISOString(),
+    content,
+    metadata,
+  };
+  fs.writeFileSync(path.join(dir, `${id}-finding.json`), JSON.stringify(record, null, 2));
+  return { id };
+}
+
+function readLocal(id: string): LocalRecord | null {
+  const dir = getWorkDir();
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  const match = files.find(f => f.startsWith(id));
+  if (!match) return null;
+  return JSON.parse(fs.readFileSync(path.join(dir, match), "utf8"));
+}
+
+function listLocal(filters?: { type?: string; session_id?: string }): LocalRecord[] {
+  const dir = getWorkDir();
+  if (!fs.existsSync(dir)) return [];
+  const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));
+  const records: LocalRecord[] = [];
+  for (const f of files) {
+    try {
+      const rec = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as LocalRecord;
+      if (filters?.type && rec.type !== filters.type) continue;
+      if (filters?.session_id && rec.metadata.session_id !== filters.session_id) continue;
+      records.push(rec);
+    } catch { /* skip corrupt files */ }
+  }
+  return records.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
+
+function updateLocalMetadata(id: string, metadata: Record<string, unknown>): boolean {
+  const dir = getWorkDir();
+  const files = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+  const match = files.find(f => f.startsWith(id));
+  if (!match) return false;
+  const filePath = path.join(dir, match);
+  const rec = JSON.parse(fs.readFileSync(filePath, "utf8")) as LocalRecord;
+  rec.metadata = { ...rec.metadata, ...metadata };
+  fs.writeFileSync(filePath, JSON.stringify(rec, null, 2));
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Researcher-specific style enum (not in shared schemas — researcher uses
+// the full citation/grading taxonomy; other agents may use different sets).
+// ---------------------------------------------------------------------------
+
+const FindingStyle = Type.Union([
+  Type.Literal("intelligence"),
+  Type.Literal("academic"),
+  Type.Literal("journalism"),
+  Type.Literal("data"),
+  Type.Literal("general"),
+], { description: "Citation/grading standard to apply. Determines which fields are required." });
+
+type SourceInput = Static<typeof SourceSchema>;
+
+// ---------------------------------------------------------------------------
+// Style validation profiles
+// ---------------------------------------------------------------------------
+
+const FINDING_PROFILES: StyleProfiles = {
+  sourceRequired: {
+    intelligence: ["source_reliability", "information_credibility", "date_accessed", "collection_method"],
+    academic: ["authors", "date_published", "date_accessed"],
+    journalism: ["authors", "date_published", "date_accessed"],
+    data: ["date_accessed", "collection_method", "source_reliability", "information_credibility"],
+    general: ["date_accessed"],
+  },
+  sourceEncouraged: {
+    intelligence: ["verbatim_quote"],
+    academic: ["publisher", "doi", "verbatim_quote"],
+    journalism: ["publisher", "verbatim_quote", "source_reliability", "information_credibility"],
+    data: [],
+    general: [],
+  },
+  recordEncouraged: {
+    intelligence: ["corroboration", "date_information"],
+    academic: [],
+    journalism: [],
+    data: ["date_information", "corroboration"],
+    general: [],
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Domain logic
+// ---------------------------------------------------------------------------
+
+function inferCorroboration(sources: SourceInput[], explicit?: string): string {
+  if (explicit) return explicit;
+  const uniqueNames = new Set(sources.map(s => s.source_name.toLowerCase()));
+  if (uniqueNames.size >= 3) return "confirmed";
+  if (uniqueNames.size === 2) return "probable";
+  return "uncorroborated";
+}
+
+function admiraltyGrade(sources: SourceInput[], primaryIndex: number): string | null {
+  const primary = sources[primaryIndex];
+  if (!primary) return null;
+  if (primary.source_reliability && primary.information_credibility) {
+    return `${primary.source_reliability}${primary.information_credibility}`;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// StoredFinding type (used as metadata shape)
+// ---------------------------------------------------------------------------
+
+interface StoredFinding {
+  id: string;
+  session_id: string;
+  agent: string;
+  timestamp: string;
+  claim_preview: string;
+  style: string;
+  claim: string;
+  sources: SourceInput[];
+  primary_source_index: number;
+  corroboration: string;
+  date_information?: string;
+  topic_tags: string[];
+  entities: string[];
+  related_findings: string[];
+  contradicts: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Prompt snippets per style
+// ---------------------------------------------------------------------------
+
+const INTELLIGENCE_SNIPPET = `Record every discrete factual claim using record_finding with style "intelligence".
+
+ADMIRALTY grading (required for each source):
+  Source Reliability: A=completely reliable, B=usually reliable, C=fairly reliable, D=not usually reliable, E=unreliable, F=cannot be judged
+  Information Credibility: 1=confirmed, 2=probably true, 3=possibly true, 4=doubtful, 5=improbable, 6=cannot be judged
+
+Multiple sources on one finding strengthen corroboration. Use add_source to append corroborating sources to existing findings.
+Use query_findings to search recorded findings. Use get_finding to retrieve a specific finding by ID.`;
+
+const DATA_SNIPPET = `Record every discrete data point using record_finding with style "data".
+
+ADMIRALTY grading (required for each source):
+  Source Reliability: A=completely reliable (official API), B=usually reliable (established aggregator), C=fairly reliable, D-F=increasing doubt
+  Information Credibility: 1=confirmed by multiple sources, 2=probably true, 3=possibly true, 4=doubtful, 5=improbable, 6=cannot judge
+
+Use add_source to attach corroborating sources to existing findings.
+Use query_findings to search recorded findings. Use get_finding to retrieve by ID.`;
+
+const GENERAL_SNIPPET = `Record findings using record_finding. Choose a style: intelligence (ADMIRALTY grading), academic (author/publisher focus), journalism (byline/quote focus), data (API/dataset focus), or general (minimal requirements).
+Use add_source to attach additional sources to existing findings.
+Use query_findings to search. Use get_finding to retrieve by ID.`;
+
+function getPromptSnippet(): string {
+  const defaultStyle = process.env.FINDING_STYLE || "";
+  if (defaultStyle === "intelligence") return INTELLIGENCE_SNIPPET;
+  if (defaultStyle === "data") return DATA_SNIPPET;
+  return GENERAL_SNIPPET;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function getSessionId(): string {
+  return process.env.RUN_ID || process.env.SESSION_ID || "default";
+}
+
+function recordToFinding(rec: LocalRecord, content: string): StoredFinding {
+  const m = rec.metadata as Record<string, any>;
+  return {
+    id: rec.id,
+    session_id: m.session_id || "",
+    agent: rec.agent,
+    timestamp: rec.timestamp,
+    claim_preview: m.claim_preview || "",
+    style: m.style || "general",
+    claim: content,
+    sources: m.sources || [],
+    primary_source_index: m.primary_source_index ?? 0,
+    corroboration: m.corroboration || "uncorroborated",
+    date_information: m.date_information,
+    topic_tags: m.topic_tags || [],
+    entities: m.entities || [],
+    related_findings: m.related_findings || [],
+    contradicts: m.contradicts || [],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Extension
+// ---------------------------------------------------------------------------
+
+export default function (pi: ExtensionAPI) {
+  const agentName = AGENT_NAME;
+  if (agentName !== "researcher") {
+    if (agentName) {
+      console.warn(
+        `[workproduct] Skipping researcher workproduct extension — AGENT_NAME is "${agentName}", expected "researcher".`,
+      );
+    }
+    return;
+  }
+
+  const snippet = getPromptSnippet();
+
+  // ---- record_finding ----
+  pi.registerTool({
+    name: "record_finding",
+    label: "Record Finding",
+    description:
+      "Record a structured finding with one or more sources, ADMIRALTY grading, and provenance metadata. " +
+      "Style determines which fields are required: intelligence (ADMIRALTY + collection_method), academic (authors + dates), " +
+      "journalism (byline + quotes), data (ADMIRALTY + collection_method), general (minimal).",
+    promptSnippet: snippet,
+    parameters: Type.Object({
+      style: FindingStyle,
+      claim: Type.String({ description: "The specific factual assertion" }),
+      sources: Type.Array(SourceSchema, {
+        minItems: 1,
+        description: "One or more sources supporting this finding",
+      }),
+      primary_source_index: Type.Optional(Type.Integer({
+        minimum: 0,
+        description: "Index into sources[] for the strongest source. Defaults to 0.",
+      })),
+      corroboration: Type.Optional(Corroboration),
+      date_information: Type.Optional(Type.String({
+        description: "When the information is FROM if different from access/publish dates",
+      })),
+      topic_tags: Type.Optional(Type.Array(Type.String())),
+      entities: Type.Optional(Type.Array(Type.String(), {
+        description: "Named entities: companies, people, products",
+      })),
+      related_findings: Type.Optional(Type.Array(Type.String())),
+      contradicts: Type.Optional(Type.Array(Type.String())),
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const style = params.style as string;
+        const sources: SourceInput[] = params.sources;
+        const now = new Date().toISOString();
+
+        for (const src of sources) {
+          if (!src.date_accessed) src.date_accessed = now;
+        }
+
+        const { errors, warnings } = validateByStyle(
+          FINDING_PROFILES, style, sources as Record<string, unknown>[], params,
+        );
+        if (errors.length > 0) {
+          return {
+            content: [{ type: "text" as const, text: `Validation failed:\n${errors.join("\n")}` }],
+          };
+        }
+
+        const primaryIdx = params.primary_source_index ?? 0;
+        if (primaryIdx >= sources.length) {
+          return {
+            content: [{ type: "text" as const, text: `Error: primary_source_index ${primaryIdx} exceeds sources length ${sources.length}` }],
+          };
+        }
+
+        const corroboration = inferCorroboration(sources, params.corroboration);
+        const grade = admiraltyGrade(sources, primaryIdx);
+        const sessionId = getSessionId();
+
+        const result = writeLocal("finding", JSON.stringify(params.claim), {
+          style,
+          sources,
+          primary_source_index: primaryIdx,
+          corroboration,
+          admiralty_grade: grade,
+          date_information: params.date_information || undefined,
+          topic_tags: params.topic_tags || [],
+          entities: params.entities || [],
+          related_findings: params.related_findings || [],
+          contradicts: params.contradicts || [],
+          claim_preview: params.claim.slice(0, 120),
+          session_id: sessionId,
+        });
+
+        const parts = [`Finding recorded: ${result.id}`];
+        if (grade) parts.push(`ADMIRALTY grade: ${grade}`);
+        parts.push(`Corroboration: ${corroboration}`);
+        parts.push(`Sources: ${sources.length}`);
+        if (warnings.length > 0) {
+          parts.push(`\nWarnings:\n${warnings.join("\n")}`);
+        }
+
+        return {
+          content: [{ type: "text" as const, text: parts.join("\n") }],
+          details: { id: result.id, admiralty_grade: grade, corroboration, source_count: sources.length, warnings },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
+
+  // ---- add_source ----
+  pi.registerTool({
+    name: "add_source",
+    label: "Add Source to Finding",
+    description:
+      "Append an additional source to an existing finding. Recalculates corroboration if it was auto-inferred. " +
+      "Use this when you discover a corroborating source for an already-recorded finding.",
+    parameters: Type.Object({
+      finding_id: Type.String({ description: "ULID of the existing finding" }),
+      source: SourceSchema,
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const rec = readLocal(params.finding_id);
+        if (!rec) {
+          return { content: [{ type: "text" as const, text: `Error: finding ${params.finding_id} not found` }] };
+        }
+        if (rec.type !== "finding") {
+          return { content: [{ type: "text" as const, text: `Error: artifact ${params.finding_id} is not a finding` }] };
+        }
+
+        const m = rec.metadata as Record<string, any>;
+        const existingSources: SourceInput[] = m.sources || [];
+        const style: string = m.style || "general";
+
+        const src: SourceInput = params.source;
+        if (!src.date_accessed) src.date_accessed = new Date().toISOString();
+
+        const { errors, warnings } = validateByStyle(
+          FINDING_PROFILES, style, [src] as Record<string, unknown>[], {},
+        );
+        if (errors.length > 0) {
+          return {
+            content: [{ type: "text" as const, text: `Validation failed for new source:\n${errors.join("\n")}` }],
+          };
+        }
+
+        const updatedSources = [...existingSources, src];
+        const corroboration = inferCorroboration(updatedSources);
+        const primaryIdx: number = m.primary_source_index ?? 0;
+
+        updateLocalMetadata(params.finding_id, {
+          ...m,
+          sources: updatedSources,
+          corroboration,
+        });
+
+        const grade = admiraltyGrade(updatedSources, primaryIdx);
+        const parts = [
+          `Source added to finding ${params.finding_id}`,
+          `Sources: ${updatedSources.length}`,
+          `Corroboration: ${corroboration}`,
+        ];
+        if (grade) parts.push(`Primary ADMIRALTY grade: ${grade}`);
+        if (warnings.length > 0) parts.push(`\nWarnings:\n${warnings.join("\n")}`);
+
+        return {
+          content: [{ type: "text" as const, text: parts.join("\n") }],
+          details: { finding_id: params.finding_id, source_count: updatedSources.length, corroboration },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
+
+  // ---- query_findings ----
+  pi.registerTool({
+    name: "query_findings",
+    label: "Query Findings",
+    description:
+      "Search recorded findings with optional filters. Returns matching findings sorted by timestamp descending.",
+    parameters: Type.Object({
+      agent: Type.Optional(Type.String({ description: "Filter by producing agent" })),
+      session_id: Type.Optional(Type.String({ description: "Filter by research session" })),
+      topic_tag: Type.Optional(Type.String({ description: "Filter by topic tag (substring match)" })),
+      entity: Type.Optional(Type.String({ description: "Filter by named entity (substring match)" })),
+      min_reliability: Type.Optional(SourceReliability),
+      max_credibility: Type.Optional(InformationCredibility),
+      since: Type.Optional(Type.String({ description: "ISO 8601 — only findings after this timestamp" })),
+      style: Type.Optional(FindingStyle),
+      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200, description: "Max results, default 50" })),
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const targetAgent = params.agent || agentName;
+
+        const allRecords = listLocal({ type: "finding", session_id: params.session_id });
+
+        const reliabilityOrder = "ABCDEF";
+        let findings: Array<{ rec: LocalRecord; m: Record<string, any> }> = allRecords
+          .filter(rec => !params.agent || rec.agent === targetAgent)
+          .filter(rec => !params.since || rec.timestamp >= params.since)
+          .filter(rec => !params.style || (rec.metadata as Record<string, any>).style === params.style)
+          .map(rec => ({ rec, m: rec.metadata as Record<string, any> }));
+
+        if (params.topic_tag) {
+          const tag = params.topic_tag.toLowerCase();
+          findings = findings.filter(({ m }) => {
+            const tags: string[] = m.topic_tags || [];
+            return tags.some((t: string) => t.toLowerCase().includes(tag));
+          });
+        }
+        if (params.entity) {
+          const ent = params.entity.toLowerCase();
+          findings = findings.filter(({ m }) => {
+            const entities: string[] = m.entities || [];
+            return entities.some((e: string) => e.toLowerCase().includes(ent));
+          });
+        }
+        if (params.min_reliability) {
+          const minIdx = reliabilityOrder.indexOf(params.min_reliability);
+          findings = findings.filter(({ m }) => {
+            const sources: SourceInput[] = m.sources || [];
+            const primary = sources[m.primary_source_index ?? 0];
+            if (!primary?.source_reliability) return false;
+            return reliabilityOrder.indexOf(primary.source_reliability) <= minIdx;
+          });
+        }
+        if (params.max_credibility) {
+          findings = findings.filter(({ m }) => {
+            const sources: SourceInput[] = m.sources || [];
+            const primary = sources[m.primary_source_index ?? 0];
+            if (!primary?.information_credibility) return false;
+            return primary.information_credibility <= params.max_credibility;
+          });
+        }
+
+        findings.sort((a, b) => b.rec.timestamp.localeCompare(a.rec.timestamp));
+
+        const limit = params.limit || 50;
+        findings = findings.slice(0, limit);
+
+        if (findings.length === 0) {
+          return { content: [{ type: "text" as const, text: "No findings match the filters." }], details: { count: 0 } };
+        }
+
+        const lines: string[] = [`Found ${findings.length} finding(s):\n`];
+        for (const { rec, m } of findings) {
+          const sources: SourceInput[] = m.sources || [];
+          const primary = sources[m.primary_source_index ?? 0];
+          const grade = primary?.source_reliability && primary?.information_credibility
+            ? `${primary.source_reliability}${primary.information_credibility}`
+            : "—";
+          lines.push(`- [${rec.id}] ${grade} | ${m.corroboration || "uncorroborated"} | ${sources.length} src | ${m.claim_preview || ""}`);
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+          details: { count: findings.length },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
+
+  // ---- get_finding ----
+  pi.registerTool({
+    name: "get_finding",
+    label: "Get Finding",
+    description: "Retrieve a specific finding by its ULID. Returns full finding with all sources and metadata.",
+    parameters: Type.Object({
+      id: Type.String({ description: "ULID of the finding" }),
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const rec = readLocal(params.id);
+        if (!rec) {
+          return { content: [{ type: "text" as const, text: `Error: finding ${params.id} not found` }] };
+        }
+
+        const finding = recordToFinding(rec, JSON.parse(rec.content));
+        const grade = admiraltyGrade(finding.sources, finding.primary_source_index);
+
+        const text = JSON.stringify(finding, null, 2);
+        return {
+          content: [{ type: "text" as const, text }],
+          details: { id: finding.id, admiralty_grade: grade },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
+}

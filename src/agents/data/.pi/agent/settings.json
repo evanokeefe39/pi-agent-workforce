@@ -1,0 +1,28 @@
+{
+  "packages": [
+    "npm:shitty-extensions",
+    "npm:pi-otel",
+    "npm:pi-permission-system"
+  ],
+  "terminal": {
+    "showTerminalProgress": true
+  },
+  "steeringMode": "all",
+  "followUpMode": "all",
+  "quietStartup": true,
+  "theme": "dark",
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-chat",
+  "defaultThinkingLevel": "high",
+  "compaction": {
+    "enabled": false
+  },
+  "otel": {
+    "enabled": true,
+    "endpoint": "http://openobserve:5080/api/default",
+    "protocol": "http",
+    "serviceName": "data-agent",
+    "captureContent": "metadata_only",
+    "signals": { "traces": true, "metrics": true, "logs": true }
+  }
+}

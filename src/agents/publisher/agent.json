@@ -1,0 +1,16 @@
+{
+  "name": "Publisher",
+  "role": "cmo",
+  "title": "Publishing Manager",
+  "icon": "globe",
+  "reportsTo": "CEO",
+  "capabilities": "External publishing with HITL gating, social media, email, scheduling, analytics",
+  "adapterType": "http",
+  "adapterConfig": {
+    "url": "http://publisher:8080/invoke",
+    "timeoutSec": 300
+  },
+  "runtimeConfig": {
+    "heartbeat": { "enabled": true, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 }
+  }
+}

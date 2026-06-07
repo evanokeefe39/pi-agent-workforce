@@ -1,0 +1,65 @@
+// Researcher Agent Permission Policy
+// Role: information gathering, web research, structured findings.
+// Can read/write files, use bash, search the web, scrape, write artifacts.
+// Cannot create issues, invoke agents, or make strategic decisions.
+{
+  "defaultPolicy": {
+    "tools": "deny",
+    "bash": "allow",
+    "mcp": "deny",
+    "skills": "allow",
+    "special": "allow"
+  },
+
+  "tools": {
+    "*": "deny",
+
+    // Built-in tools — full executor access
+    "read": "allow",
+    "write": "allow",
+    "edit": "allow",
+    "grep": "allow",
+    "find": "allow",
+    "ls": "allow",
+    "bash": "allow",
+
+    // Research tools
+    "web_search": "allow",
+    "web_fetch": "allow",
+    "deep_research": "allow",
+    "deep_research_resume": "allow",
+    "research_query": "allow",
+    "research_enrich": "allow",
+    "scrape_static": "allow",
+    "scrape_stealth": "allow",
+    "scrape_apify": "allow",
+    "list_actors": "allow",
+    "scrape_status": "allow",
+
+    // Artifacts — full access
+    "write_artifact": "allow",
+    "read_artifact": "allow",
+    "list_artifacts": "allow",
+    "get_template": "allow",
+
+    // Workproduct — findings (researcher's per-agent kinds)
+    "record_finding": "allow",
+    "add_source": "allow",
+    "query_findings": "allow",
+    "get_finding": "allow",
+
+    // Escalation
+    "escalate": "allow",
+
+    // DuckDB
+    "duckdb_query": "allow",
+    "duckdb_import": "allow",
+
+
+
+  },
+
+  "bash": {
+    "*": "allow"
+  }
+}

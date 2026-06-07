@@ -1,0 +1,213 @@
+name: pi-agent-workforce
+
+x-agent-build: &agent-build
+  context: src/agents
+  dockerfile: Dockerfile
+
+x-agent: &agent
+  restart: unless-stopped
+  env_file: .env
+  deploy:
+    resources:
+      limits:
+        memory: 512M
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-pi-agent-workforce}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-artifact-db.sql:/docker-entrypoint-initdb.d/init-artifact-db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  minio:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER:-minioadmin} $${MINIO_ROOT_PASSWORD:-minioadmin};
+      mc mb --ignore-existing local/artifacts;
+      mc mb --ignore-existing local/logs;
+      mc mb --ignore-existing local/state;
+      echo 'buckets ready';
+      "
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+
+  artifact-service:
+    build:
+      context: src/artifact-service
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      PORT: "8090"
+      DATABASE_URL: "postgres://artifact:artifact-eval@postgres:5432/artifact_store"
+      S3_ENDPOINT: "http://minio:9000"
+      S3_ACCESS_KEY: "${MINIO_ROOT_USER:-minioadmin}"
+      S3_SECRET_KEY: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
+    volumes:
+      - ./src/agents/rbac.json:/app/rbac.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:8090/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  openobserve:
+    image: public.ecr.aws/zinclabs/openobserve:latest
+    restart: unless-stopped
+    ports:
+      - "5080:5080"
+    environment:
+      ZO_ROOT_USER_EMAIL: "${ZO_ROOT_USER_EMAIL:-admin@example.com}"
+      ZO_ROOT_USER_PASSWORD: "${ZO_ROOT_USER_PASSWORD:-pi-agent-workforce}"
+      ZO_DATA_DIR: "/data"
+    volumes:
+      - openobserve-data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  researcher:
+    <<: *agent
+    build:
+      <<: *agent-build
+      target: researcher
+    ports:
+      - "8082:8080"
+    env_file:
+      - .env
+      - src/agents/researcher/.env
+    environment:
+      AGENT_NAME: "researcher"
+      WORKSPACE: "default"
+      NVIDIA_NIM_API_KEY: "${NVIDIA_NIM_API_KEY}"
+      FINDING_STYLE: "intelligence"
+      ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
+    volumes:
+      - researcher-workspace:/workspace
+    depends_on:
+      artifact-service:
+        condition: service_healthy
+
+  data:
+    <<: *agent
+    build:
+      <<: *agent-build
+      target: data
+    ports:
+      - "8083:8080"
+    env_file:
+      - .env
+      - src/agents/data/.env
+    environment:
+      AGENT_NAME: "data"
+      WORKSPACE: "default"
+      GROQ_API_KEY: "${GROQ_API_KEY}"
+      NVIDIA_NIM_API_KEY: "${NVIDIA_NIM_API_KEY}"
+      FINDING_STYLE: "data"
+      ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    volumes:
+      - data-workspace:/workspace
+    depends_on:
+      artifact-service:
+        condition: service_healthy
+
+  writer:
+    <<: *agent
+    build:
+      <<: *agent-build
+      target: writer
+    ports:
+      - "8084:8080"
+    env_file:
+      - .env
+      - src/agents/writer/.env
+    environment:
+      AGENT_NAME: "writer"
+      WORKSPACE: "default"
+      ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    volumes:
+      - writer-workspace:/workspace
+    depends_on:
+      artifact-service:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+    name: pi-agent-workforce-postgres-data
+  minio-data:
+    name: pi-agent-workforce-minio-data
+  researcher-workspace:
+    name: pi-agent-workforce-researcher-workspace
+  data-workspace:
+    name: pi-agent-workforce-data-workspace
+  writer-workspace:
+    name: pi-agent-workforce-writer-workspace
+  openobserve-data:

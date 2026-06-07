@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+setup.sh
+setup.ps1
+bootstrap-invite.cjs
+paperclip-config.json
+*.md
+!templates/
+!skills/paperclip-skills/

@@ -1,0 +1,58 @@
+// Default executor agent permission policy
+// Role: executor — works on assigned issues, reads/writes files, uses bash.
+// Customize per agent as role-specific tools are added.
+{
+  "defaultPolicy": {
+    "tools": "deny",
+    "bash": "allow",
+    "mcp": "deny",
+    "skills": "allow",
+    "special": "allow"
+  },
+
+  "tools": {
+    "*": "deny",
+
+    // Built-in tools — full executor access
+    "read": "allow",
+    "write": "allow",
+    "edit": "allow",
+    "grep": "allow",
+    "find": "allow",
+    "ls": "allow",
+    "bash": "allow",
+
+    // Artifacts — full access
+    "write_artifact": "allow",
+    "read_artifact": "allow",
+    "list_artifacts": "allow",
+    "get_template": "allow",
+
+    // Escalation
+    "escalate": "allow",
+
+    // Web tools
+    "web_search": "allow",
+    "web_fetch": "allow",
+
+    // DuckDB
+    "duckdb_query": "allow",
+    "duckdb_import": "allow",
+
+    // Workproduct — qa kinds (artifact_review, plan_review, stage_gate)
+    "record_artifact_review": "allow",
+    "record_plan_review": "allow",
+    "record_stage_gate": "allow",
+    "query_assessments": "allow",
+    "get_assessment": "allow",
+
+    // Findings
+    "record_finding": "allow",
+    "list_findings": "allow",
+    "export_findings": "allow"
+  },
+
+  "bash": {
+    "*": "allow"
+  }
+}

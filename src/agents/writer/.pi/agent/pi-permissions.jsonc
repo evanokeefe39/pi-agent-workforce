@@ -1,0 +1,64 @@
+// Writer Agent Permission Policy
+// Role: content creation, formatting, style checking, document production.
+// Full executor access plus style/lint tools and document writing.
+{
+  "defaultPolicy": {
+    "tools": "deny",
+    "bash": "allow",
+    "mcp": "deny",
+    "skills": "allow",
+    "special": "allow"
+  },
+
+  "tools": {
+    "*": "deny",
+
+    // Built-in tools — full executor access
+    "read": "allow",
+    "write": "allow",
+    "edit": "allow",
+    "grep": "allow",
+    "find": "allow",
+    "ls": "allow",
+    "bash": "allow",
+
+    // Web tools (for reference/fact-checking)
+    "web_search": "allow",
+    "web_fetch": "allow",
+
+    // Artifacts — full access
+    "write_artifact": "allow",
+    "read_artifact": "allow",
+    "list_artifacts": "allow",
+    "get_template": "allow",
+
+    // Workproduct — writer kinds (report, guide, article, marketing_copy, newsletter)
+    "record_report": "allow",
+    "record_guide": "allow",
+    "record_article": "allow",
+    "record_marketing_copy": "allow",
+    "record_newsletter": "allow",
+    "query_content": "allow",
+    "get_content": "allow",
+
+    // DuckDB (query data for reports)
+    "duckdb_query": "allow",
+    "duckdb_import": "allow",
+
+    // Escalation
+    "escalate": "allow",
+
+
+
+    // Scraping — not writer's job
+    "scrape_static": "deny",
+    "scrape_stealth": "deny",
+    "scrape_browser": "deny",
+    "scrape_apify": "deny",
+
+  },
+
+  "bash": {
+    "*": "allow"
+  }
+}
