@@ -4,177 +4,69 @@ Never use the Workflow tool (dynamic workflows). Too token-expensive. Use Agent 
 
 ## What this is
 
-Multi-agent workforce — Pi agents in Docker containers orchestrated via pi-subagents-http. Each agent is a standalone HTTP server with its own model, tools, and dependencies. An orchestrating Pi session on the host delegates tasks via the `subagent()` tool.
-
-Evolved from evaluation work in `paperclip-eval` repo (see its EVALUATION.md for architecture comparison).
+Multi-agent workforce — Pi agents in Docker containers orchestrated via pi-subagents-http. Planner decomposes goals, delegates to specialist agents (researcher, data, writer), assesses quality, iterates. Evolved from `paperclip-eval` repo.
 
 ## Architecture
 
 ```
-E2E test / user
-  └─ POST http://localhost:8081/invoke  ← planner container (deepseek-reasoner)
-       ├─ subagent("researcher", task) → http://researcher:8080 (qwen3-32b)
-       ├─ subagent("data", task)       → http://data:8080      (qwen3-32b)
-       └─ subagent("writer", task)     → http://writer:8080     (qwen3-32b)
+POST http://localhost:8081/invoke  ← planner (deepseek-v4-flash)
+  ├─ subagent("researcher", task) → :8082 (deepseek-v4-flash)
+  ├─ subagent("data", task)       → :8083 (deepseek-v4-flash)
+  └─ subagent("writer", task)     → :8084 (deepseek-v4-flash)
 ```
 
-The planner is the orchestrating agent. It has pi-subagents-http for remote delegation to worker agents over Docker networking. Worker agents have pi-subagents (local, non-HTTP) for internal model routing on subtasks.
+Delegation blocks until agent completes. Parallel via `tasks: [...]`. Session IDs scope artifacts and correlate across agents.
 
-Delegation is blocking by default — tool call waits until the remote agent completes. Parallel delegation via `tasks: [...]`. Server supports concurrent sessions (MAX_CONCURRENT_SESSIONS per container).
+## Stack
 
-Session IDs (from Pi SDK's SessionManager) are used for artifact scoping and cross-agent correlation. No process.env mutation for per-request state.
+- **Runtime:** Bun (server.ts) + Node (Pi CLI). TypeScript, no build step.
+- **SDK:** `@earendil-works/pi-coding-agent` as local dep in package.json
+- **HTTP:** Fastify v5
+- **Artifacts:** Bun service + Postgres + MinIO. RBAC via rbac.json. `artifact://` URIs.
+- **Observability:** Pino + OTel → OpenObserve (:5080)
+- **Platform:** Windows 11, Docker Desktop, Git Bash
 
-## Repo layout
+## Key files
 
-```
-docker-compose.yml          Agent containers + infrastructure
-.env.example                Template for API keys
-scripts/init-artifact-db.sql  Postgres init (artifact_store)
-src/artifact-service/       Bun artifact storage (HTTP, MinIO, Postgres)
-src/agents/
-  server.mjs               Agent HTTP server (Node, Pi SDK)
-  logger.mjs               Pino logger with OTel shipping
-  Dockerfile               Multi-stage build (node:22-slim + Pi CLI)
-  rbac.json                 Artifact access control per agent
-  extensions/               Pi extensions (discovered from ~/.pi/agent/extensions/)
-    artifacts/              write_artifact, read_artifact, list_artifacts
-    subagent-http/          Vendored pi-subagents-http (planner only)
-    deep-research/          Multi-iteration research engine
-    duckdb/                 DuckDB analytics
-    web-search.ts           Exa semantic search
-    web-fetch.ts            URL fetch + Jina Reader fallback
-    web-scrape/             4-tier scraping (static, stealth, browser, Apify)
-    workproduct-lib/        Structured findings with ADMIRALTY grading
-    writing-style/          Vale linter + style profiling
-  planner/                  Planner agent — task decomposition, delegation, quality assessment
-  researcher/               Research agent — web search, scraping, structured findings
-  data/                     Data agent — scraping, ETL, database ops
-  writer/                   Writer agent — document pipeline, style engine
-  coder/                    Coder agent — code execution, analysis
-  qa/                       QA agent — review, verdicts, gating
-  publisher/                Publisher agent — content distribution
-tasks/
-  lessons.md                Patterns learned from corrections and successes
-  plans/                    Named implementation plans
-tests/
-  e2e/                      End-to-end test suite
-    jsonl-helpers.sh         jq-based JSONL parsing + artifact + planner helpers
-    e2e-30-instagram-growth-research.sh   Full planner pipeline test
-    e2e-31-researcher-tool-trials.sh      Model/prompt comparison trials
-    e2e-32-model-and-output-validation.sh Model + concurrency + output validation
-    run-e2e.sh
-```
-
-## Quick start
-
-```bash
-# 1. Copy .env.example to .env, fill in API keys
-cp .env.example .env
-
-# 2. Create per-agent .env files
-echo "WORKSPACE=default\nARTIFACT_SERVICE_URL=http://artifact-service:8090" > src/agents/researcher/.env
-# repeat for data/, writer/
-
-# 3. Start infrastructure + agents
-docker compose up -d
-
-# 4. Install pi-subagents-http on host
-pi install ~/repos/pi-subagents-http
-
-# 5. Create extension config
-mkdir -p ~/.pi/agent/extensions/subagent-http
-cat > ~/.pi/agent/extensions/subagent-http/config.json << 'EOF'
-{
-  "agents": [
-    { "name": "researcher", "url": "http://localhost:8082" },
-    { "name": "data", "url": "http://localhost:8083" },
-    { "name": "writer", "url": "http://localhost:8084" }
-  ]
-}
-EOF
-
-# 6. Test
-pi -p "Use subagent({ action: \"list\" }) to see available agents"
-```
-
-## Server endpoints (per agent container)
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/invoke` | POST | Accept task `{ task, context?, correlationId? }` → 202 |
-| `/status/:runId` | GET | Run state, duration, turn count |
-| `/result/:runId` | GET | Output, usage, model. 409 if running |
-| `/cancel/:runId` | POST | Abort via AbortController |
-| `/describe` | GET | Agent metadata (name, model, tools, status) |
-| `/health` | GET | Readiness check |
-
-## Artifact service
-
-- URIs: `artifact://{workspace}/{run}/{agent}/{type}/{id}_{filename}`
-- Env vars: `WORKSPACE` (tenant namespace), `RUN_ID` (set per-request by server.mjs)
-- Storage: MinIO (S3-compat) + Postgres metadata
-- RBAC: glob patterns in rbac.json per agent
-- Types: `research`, `dataset`, `report`, `brief`, `finding`, `code`, `log`
-
-## Workproduct / findings
-
-Researcher and Data agents produce structured findings via `record_finding`:
-- ADMIRALTY grading (6x6 NATO: source reliability A-F, information credibility 1-6)
-- Each source has: URL, type, reliability, credibility, collection method, `source_data` (raw inline data)
-- Published as JSONL via `write_artifact` type `dataset`
-- Writer consumes findings via `read_artifact`, uses grades for hedging decisions
-
-## Ports
-
-| Service | Host Port | Container Port |
-|---------|-----------|----------------|
-| Planner | 8081 | 8080 |
-| Researcher | 8082 | 8080 |
-| Data | 8083 | 8080 |
-| Writer | 8084 | 8080 |
-| Artifact Service | 8090 | 8090 |
-| Postgres | 5432 | 5432 |
-| MinIO API | 9000 | 9000 |
-| MinIO Console | 9001 | 9001 |
-| OpenObserve | 5080 | 5080 |
+| File | What |
+|------|------|
+| `src/agents/server.ts` | Agent HTTP server (Bun, Fastify, Pi SDK, jidoka hooks) |
+| `src/agents/logger.mjs` | Pino + OTel log shipping |
+| `src/agents/Dockerfile` | Multi-stage: node:22-slim + Bun, per-agent targets |
+| `src/agents/{name}/.pi/agent/` | Agent config: AGENTS.md (sys prompt), config.yml (models), settings.json |
+| `src/agents/{name}/agent.json` | Agent metadata + validation config (maxTurns, requiredTools) |
+| `src/agents/extensions/` | Pi extensions: artifacts, web-search, web-scrape, deep-research, etc. |
+| `src/artifact-service/` | Bun artifact store (routes.ts, storage.ts, rbac.ts) |
+| `docs/model-selection.md` | Model decisions, provider catalog, cost analysis |
+| `tasks/lessons.md` | Patterns from corrections — read before starting work |
+| `ISSUES.md` | Open issues, resolved issues collapsed at bottom |
+| `MILESTONE.md` | M0-M4 milestone tracking |
 
 ## Models
 
-All agents run on V4 Flash with free fallbacks. V4 Pro demoted to plan/review only (ignored structured output, caused timeouts).
+All agents: DeepSeek V4 Flash ($0.10/M). V4 Pro demoted to plan/review fallback only (ignored structured output, caused timeouts). See `docs/model-selection.md` for full rationale.
 
-| Role | Model | Provider | Cost | Notes |
-|------|-------|----------|------|-------|
-| All agents (default/agentic) | DeepSeek V4 Flash | DeepSeek | $0.10/M (cache: $0.0028/M) | Proven reliable for tool calling and structured output |
-| Free fallback | Kimi K2.6 | OpenRouter (free) | $0 | 262K context, 1T/32B MoE |
-| Free fallback (last resort) | GPT-OSS 120B | OpenRouter (free) | $0 | 131K context |
-| Plan/review only | DeepSeek V4 Pro | DeepSeek | $1.74/M | Fallback chain for reasoning roles only |
-| Smol/commit | Llama 3.1 8B | Groq (free) | $0 | 6K TPM, smol tasks only |
-| Dev/test | GLM-5.1, Qwen3.5 | NIM (free) | $0 | 40 RPM, no daily cap |
+## Jidoka (output validation)
 
-See `docs/model-selection.md` for full rationale, provider analysis, NIM strategy, and cost projections.
+server.ts enforces output quality via `agent.json runtimeConfig.validation`:
+- **Zero-output:** 0 tokens = failed, not completed
+- **Turn breaker:** abort at maxTurns (researcher 60, writer 50)
+- **Required tools:** post-run check that specified tools were called
+- **Required artifact:** post-run check that artifact type exists in service
 
-## Concurrency
+## Ports
 
-Server supports MAX_CONCURRENT_SESSIONS per container (default 3). Planner: 1, Researcher: 3, Data: 2, Writer: 2. Session IDs from Pi SDK used for artifact scoping — no global mutable state.
-
-## Packages (Pi extensions installed via npm)
-
-All agents: `@tintinweb/pi-tasks` (task tracking), `pi-otel` (observability), `pi-permission-system`
-Worker agents: `pi-subagents` (local subprocess model routing for subtasks)
-Planner only: vendored `pi-subagents-http` (remote HTTP delegation to worker containers)
+Planner :8081, Researcher :8082, Data :8083, Writer :8084, Artifacts :8090, Postgres :5432, MinIO :9000/:9001, OpenObserve :5080
 
 ## Running tests
 
 ```bash
-bash tests/e2e/run-e2e.sh          # all active tests
-bash tests/e2e/e2e-32-model-and-output-validation.sh  # model + concurrency + output validation
+bash tests/e2e/e2e-32-model-and-output-validation.sh  # model + concurrency
 bash tests/e2e/e2e-30-instagram-growth-research.sh     # full planner pipeline
+node tests/e2e/artifact-lineage.mjs --latest           # ASCII lineage report
+node tests/e2e/artifact-lineage-html.mjs --latest      # HTML graph report
 ```
 
-Tests produce markdown reports in `tests/results/` with metrics tables.
+## Workproduct standard
 
-## Platform
-
-- Windows 11, bash via Git Bash / WSL2
-- Docker Desktop for containers
-- Pi on host for orchestration
+Researcher produces structured findings via `record_finding` with ADMIRALTY grades (A-F reliability, 1-6 credibility). Published as JSONL via `write_artifact` type `dataset`. Writer consumes findings, uses grades for hedging. Data agent (WIP) will use Python + DuckDB for code-first analysis of scraped data.
