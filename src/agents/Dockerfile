@@ -1,14 +1,15 @@
 # ============================================================
 # BASE — shared by all agents
+# Node for Pi CLI, Bun for server runtime
 # ============================================================
 FROM node:22-slim AS base
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-ENV NODE_PATH=/usr/local/lib/node_modules
+RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/local/bin/bun
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
-COPY server.mjs logger.mjs ./
+COPY package.json bun.lock* ./
+RUN bun install --production
+COPY server.ts logger.mjs ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/deep-research/ /root/.pi/agent/extensions/deep-research/
 COPY extensions/duckdb/ /root/.pi/agent/extensions/duckdb/
@@ -22,8 +23,8 @@ ENV WORKSPACE_DIR=/workspace
 RUN mkdir -p /workspace
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["node", "server.mjs"]
+  CMD bun -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["bun", "run", "server.ts"]
 
 # ============================================================
 # PLANNER — orchestration only (subagent-http + artifact read)
@@ -31,13 +32,13 @@ CMD ["node", "server.mjs"]
 # research/scraping tools. Planner must delegate, never do work itself.
 # ============================================================
 FROM node:22-slim AS planner
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl unzip && rm -rf /var/lib/apt/lists/*
 RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
-ENV NODE_PATH=/usr/local/lib/node_modules
+RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/local/bin/bun
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
-COPY server.mjs logger.mjs ./
+COPY package.json bun.lock* ./
+RUN bun install --production
+COPY server.ts logger.mjs ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/subagent-http/ /root/.pi/agent/extensions/subagent-http/
 RUN cd /root/.pi/agent/extensions/subagent-http && npm install --omit=dev 2>/dev/null || true
@@ -47,8 +48,8 @@ RUN pi extensions install || true
 RUN mkdir -p /workspace
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["node", "server.mjs"]
+  CMD bun -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["bun", "run", "server.ts"]
 
 # ============================================================
 # LIGHTWEIGHT AGENTS — ceo, coder, qa, publisher
@@ -83,7 +84,7 @@ COPY researcher/agent.json /app/researcher/agent.json
 COPY researcher/scripts/ /app/scripts/
 
 # ============================================================
-# DATA — heavy scraping (browser + ffmpeg + DuckDB)
+# DATA — heavy scraping (browser + ffmpeg + DuckDB + Python)
 # ============================================================
 FROM researcher-deps AS data-deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -93,6 +94,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 RUN scrapling install
 RUN npm install -g @duckdb/node-api
+RUN pip3 install --break-system-packages duckdb
 
 FROM data-deps AS data
 COPY data/.pi/agent/ /root/.pi/agent/
