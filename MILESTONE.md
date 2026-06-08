@@ -60,6 +60,41 @@ Completed as part of M0.1 infrastructure work. Spec: `tasks/specs/artifact-store
 
 ---
 
+## M1.5: Artifact Lineage — Query Layer and UI
+
+Track full dependency chains across agent-produced artifacts. Which agent created what, what inputs fed each output, how documents derive from source data. Lineage captured implicitly via read/write tracking in the artifact client — zero changes to agent prompts.
+
+Spec: `tasks/specs/artifact-lineage-service.md`
+
+### Phases
+
+**Phase 1: Schema + Capture** — artifact_edges table, client-side read tracking, server-side edge creation on write. This is the foundation — once edges exist, everything else is queryable.
+
+**Phase 2: Query API** — GET /lineage/:id (ancestors/descendants with depth), GET /lineage/graph?run_id=X (full graph as nodes+edges), PROV-JSON output format.
+
+**Phase 3: UI** — React Flow + dagre DAG visualization. Color-coded nodes by artifact type, click-to-inspect detail panel, filter by run/agent/type.
+
+### Success criteria
+
+- [ ] artifact_edges table stores derivation relationships between artifacts
+- [ ] Lineage captured automatically when agents read then write artifacts (no agent prompt changes)
+- [ ] GET /lineage/:id returns ancestor/descendant chain with configurable depth
+- [ ] GET /lineage/graph?run_id=X returns full graph for a planner run
+- [ ] React Flow UI renders lineage DAG with interactive node inspection
+- [ ] E2E: planner → researcher → writer pipeline produces correct lineage without any agent changes
+- [ ] Existing e2e tests (artifact-lineage.mjs, artifact-lineage-html.mjs) unbroken
+
+### Dependencies
+
+- M1 (artifact store v2) — complete
+- No dependency on jidoka hooks or data agent
+
+### Status
+
+Spec written. Not started.
+
+---
+
 ## M0.5: Ad Hoc Scraping — Design Aesthetics from Instagram
 
 Extract a structured taxonomy of every design aesthetic, style, and visual movement referenced by @vinny_creative on Instagram. Tests the Apify integration + data agent in a small, self-contained scope. Good next target.
