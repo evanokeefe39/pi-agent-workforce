@@ -101,12 +101,12 @@
 
 ---
 
-## Researcher relies on web search — not enough primary data from Apify scrapers
+## Researcher should use all research tools in parallel, not just web search
 
 **Date:** 2026-06-08
-**Trigger:** Lineage report showed only 1 Instagram profile (ohneis652) was directly examined. All other findings came from blog articles and web search. No Apify scraper runs for Instagram profiles, TikTok accounts, or engagement metrics. The researcher has access to Apify but defaulted to web_search for everything.
-**Rule:** Web search gives secondary data (articles about creators). Apify scrapers give primary data (actual follower counts, engagement rates, posting frequency, content metadata). A research task about Instagram accounts should lead with Apify scraping of actual profiles, then supplement with web search for context. The data agent should handle numerical analysis and content/metadata analysis from scraped data — this pipeline isn't implemented yet.
-**How to apply:** (1) Researcher sys prompt should mandate Apify scraping for platform-specific research before falling back to web search. (2) Data agent needs proper implementation for numerical/content analysis of scraped datasets. (3) Planner should delegate data-intensive tasks to data agent, not just researcher.
+**Trigger:** Lineage report showed only 1 Instagram profile (ohneis652) was directly examined. All other findings came from blog articles and web search. Researcher has access to deep_research, Apify scrapers, and web_search but defaulted to web_search for everything.
+**Rule:** Research tools aren't a hierarchy — they're parallel coverage with different strengths. Deep research gives broad landscape understanding across hundreds of sources (best for initial sweep and knowing where to go deep). Apify gives primary data from platforms (actual follower counts, engagement rates, content metadata). Web search is fast for targeted lookups and may surface valuable or valueless results quickly. All three can run in parallel, taking best K results from each. The researcher doesn't have to choose one over the others.
+**How to apply:** (1) Researcher should fan out all three tools in parallel for platform research tasks: deep_research for landscape, Apify for primary profile data, web_search for targeted context. (2) Data agent needs proper implementation for numerical/content analysis of scraped datasets from Apify. (3) Planner should delegate data-intensive analysis to data agent, not just researcher.
 
 ---
 
