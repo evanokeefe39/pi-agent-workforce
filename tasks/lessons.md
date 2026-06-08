@@ -101,6 +101,24 @@
 
 ---
 
+## Researcher relies on web search — not enough primary data from Apify scrapers
+
+**Date:** 2026-06-08
+**Trigger:** Lineage report showed only 1 Instagram profile (ohneis652) was directly examined. All other findings came from blog articles and web search. No Apify scraper runs for Instagram profiles, TikTok accounts, or engagement metrics. The researcher has access to Apify but defaulted to web_search for everything.
+**Rule:** Web search gives secondary data (articles about creators). Apify scrapers give primary data (actual follower counts, engagement rates, posting frequency, content metadata). A research task about Instagram accounts should lead with Apify scraping of actual profiles, then supplement with web search for context. The data agent should handle numerical analysis and content/metadata analysis from scraped data — this pipeline isn't implemented yet.
+**How to apply:** (1) Researcher sys prompt should mandate Apify scraping for platform-specific research before falling back to web search. (2) Data agent needs proper implementation for numerical/content analysis of scraped datasets. (3) Planner should delegate data-intensive tasks to data agent, not just researcher.
+
+---
+
+## Hooks for jidoka — fail loudly and early, not after 50 minutes
+
+**Date:** 2026-06-08
+**Trigger:** V4 Pro ran 42 turns producing zero findings over 7 minutes. Writer timed out at 600s twice. Planner waited 53 minutes total before the pipeline failed. No programmatic check caught the problem mid-run.
+**Rule:** Toyota's jidoka principle: detect defects immediately and stop the line. Every agent should have hooks that check output quality at regular intervals during execution, not just at the end. The andon cord (escalation) should pull automatically when an agent is producing the wrong type of output. This is model-independent — hooks enforce the standard regardless of which model is running.
+**How to apply:** Implement Pi hooks (post-turn or periodic) that check: (1) researcher: query_findings count after turn 5 — if 0, inject correction or abort; (2) writer: check write_artifact called before session ends; (3) all agents: abort if turn count exceeds 2x expected maximum. These are poka-yoke (error prevention) mechanisms, not quality checks — they prevent wasted compute, not bad content.
+
+---
+
 ## E2E tests must give goals, not imperative instructions
 
 **Date:** 2026-06-07
