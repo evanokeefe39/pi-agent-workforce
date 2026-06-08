@@ -5,9 +5,11 @@
       "baseUrl": "https://integrate.api.nvidia.com/v1",
       "apiKey": "$NVIDIA_NIM_API_KEY",
       "models": [
-        { "id": "meta/llama-4-maverick-17b-128e-instruct", "name": "Llama 4 Maverick 128E" },
-        { "id": "meta/llama-3.1-70b-instruct", "name": "Llama 3.1 70B" },
-        { "id": "meta/llama-3.1-8b-instruct", "name": "Llama 3.1 8B" }
+        { "id": "qwen/qwen3.5-122b-a10b", "name": "Qwen3.5 122B (10B active)" },
+        { "id": "qwen/qwen3-235b-a22b", "name": "Qwen3 235B (22B active)" },
+        { "id": "z-ai/glm5", "name": "GLM-5 (40B active)" },
+        { "id": "z-ai/glm5.1", "name": "GLM-5.1 (agentic)" },
+        { "id": "meta/llama-4-maverick-17b-128e-instruct", "name": "Llama 4 Maverick 128E" }
       ]
     },
     "deepseek": {
@@ -16,33 +18,7 @@
       "apiKey": "$DEEPSEEK_API_KEY",
       "models": [
         { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
-        { "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro" },
-        { "id": "deepseek-chat", "name": "DeepSeek V3 (retiring 2026-07-24)" },
-        { "id": "deepseek-reasoner", "name": "DeepSeek R1 (retiring 2026-07-24)" }
-      ]
-    },
-    "cerebras": {
-      "api": "openai-completions",
-      "baseUrl": "https://api.cerebras.ai/v1",
-      "apiKey": "$CEREBRAS_API_KEY",
-      "models": [
-        { "id": "llama-3.3-70b", "name": "Cerebras Llama 3.3 70B" },
-        { "id": "llama3.1-8b", "name": "Cerebras Llama 3.1 8B" },
-        { "id": "qwen-3-32b", "name": "Cerebras Qwen3 32B" }
-      ]
-    },
-    "minimax": {
-      "api": "openai-completions",
-      "baseUrl": "https://api.minimax.io/v1",
-      "apiKey": "$MINIMAX_API_KEY",
-      "authHeader": true,
-      "compat": {
-        "supportsUsageInStreaming": false,
-        "supportsDeveloperRole": false
-      },
-      "models": [
-        { "id": "MiniMax-M2.7", "name": "MiniMax M2.7" },
-        { "id": "MiniMax-M2.5", "name": "MiniMax M2.5" }
+        { "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro" }
       ]
     },
     "openrouter": {
@@ -50,20 +26,14 @@
       "baseUrl": "https://openrouter.ai/api/v1",
       "apiKey": "$OPENROUTER_API_KEY",
       "models": [
+        { "id": "moonshotai/kimi-k2.6:free", "name": "Kimi K2.6 (free, 262K)" },
+        { "id": "nvidia/nemotron-3-ultra-550b-a55b:free", "name": "Nemotron Ultra 550B (free, 1M)" },
+        { "id": "nvidia/nemotron-3-super-120b-a12b:free", "name": "Nemotron Super 120B (free, 1M)" },
         { "id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Llama 3.3 70B (free)" },
         { "id": "openai/gpt-oss-120b:free", "name": "GPT-OSS 120B (free)" },
         { "id": "z-ai/glm-4.5-air:free", "name": "GLM 4.5 Air (free)" },
-        { "id": "qwen/qwen3-coder:free", "name": "Qwen3 Coder (free)" },
+        { "id": "qwen/qwen3-coder:free", "name": "Qwen3 Coder (free, 1M)" },
         { "id": "deepseek/deepseek-r1:free", "name": "DeepSeek R1 (free)" }
-      ]
-    },
-    "mistral": {
-      "api": "openai-completions",
-      "baseUrl": "https://api.mistral.ai/v1",
-      "apiKey": "$MISTRAL_API_KEY",
-      "models": [
-        { "id": "codestral-latest", "name": "Codestral" },
-        { "id": "mistral-small-latest", "name": "Mistral Small" }
       ]
     },
     "groq": {
@@ -71,8 +41,6 @@
       "baseUrl": "https://api.groq.com/openai/v1",
       "apiKey": "$GROQ_API_KEY",
       "models": [
-        { "id": "qwen/qwen3-32b", "name": "Groq Qwen3 32B" },
-        { "id": "llama-3.3-70b-versatile", "name": "Groq Llama 3.3 70B" },
         { "id": "llama-3.1-8b-instant", "name": "Groq Llama 3.1 8B" },
         { "id": "meta-llama/llama-4-scout-17b-16e-instruct", "name": "Groq Llama 4 Scout" }
       ]

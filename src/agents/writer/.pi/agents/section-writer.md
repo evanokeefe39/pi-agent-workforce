@@ -2,7 +2,7 @@
 name: section-writer
 description: Writes and polishes one document section from a brief file. Produces a clean, style-compliant section ready for assembly.
 tools: read, write, bash
-model: deepseek/deepseek-v4-flash
+role: fast
 thinking: medium
 max_turns: 12
 context: fresh

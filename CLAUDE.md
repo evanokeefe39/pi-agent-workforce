@@ -140,14 +140,18 @@ Researcher and Data agents produce structured findings via `record_finding`:
 
 ## Models
 
-| Role | Model | Provider | Notes |
-|------|-------|----------|-------|
-| Agentic (tool calling) | DeepSeek V4 Flash | DeepSeek ($0.14/M) | Primary for all worker agents, 1M context, no rate limits |
-| Planning | DeepSeek V4 Pro | DeepSeek ($0.435/M) | Strong reasoning, used by planner |
-| Fallback | Llama 3.3 70B | OpenRouter (free) | Free fallback via openrouter |
-| Smol | Llama 3.1 8B | Groq (free) | Lightweight tasks, commit messages |
+All agents run opus-tier by default with 3-tier fallback (opus → free opus → haiku).
 
-MiniMax removed — fundamentally broken for tool calling. Cerebras removed — dropped all models from API (2026-06-08). Groq demoted to smol-only — TPM limits too low for agent system prompts. See `docs/model-selection.md` for full rationale.
+| Role | Model | Provider | Cost | Notes |
+|------|-------|----------|------|-------|
+| All agents (default/agentic) | DeepSeek V4 Pro | DeepSeek | $1.74/M (cache: $0.003625/M) | Opus-tier. #1 open-weight agentic |
+| Free opus fallback | Kimi K2.6 | OpenRouter (free) | $0 | 262K context, 1T/32B MoE |
+| Haiku fallback (workers) | DeepSeek V4 Flash | DeepSeek | $0.10/M | Last-resort paid fallback |
+| Haiku fallback (planner) | GPT-OSS 120B | OpenRouter (free) | $0 | 131K context |
+| Smol/commit | Llama 3.1 8B | Groq (free) | $0 | 6K TPM, smol tasks only |
+| Dev/test | GLM-5.1, Qwen3.5 | NIM (free) | $0 | 40 RPM, no daily cap |
+
+See `docs/model-selection.md` for full rationale, provider analysis, NIM strategy, and cost projections.
 
 ## Concurrency
 

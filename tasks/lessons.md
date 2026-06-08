@@ -65,6 +65,24 @@
 
 ---
 
+## Raw http.createServer accumulates hidden bugs — use a framework
+
+**Date:** 2026-06-08
+**Trigger:** Audit of server.mjs found 5 bugs: cancel-while-queued broken (AbortController created too late, request runs anyway, double metrics decrement), unhandled promise rejection on acquireSlot chain (leaks concurrency slot permanently), setTimeout never cleared in Promise.race (timer leak), metrics.durations array grows unbounded (memory leak), events array per invocation grows unbounded and is never read.
+**Rule:** Standard HTTP concerns (body parsing, size limits, request IDs, graceful shutdown, routing) are solved problems. Use Fastify (or equivalent). Reserve custom code for application logic (concurrency limiter, run tracking, SDK session management). The raw http.createServer approach saved a dependency but cost 5 bugs and ~200 lines of plumbing.
+**How to apply:** For any new HTTP server in this project, start with Fastify. It shares Pino (already a dependency), handles body limits, request ID generation, graceful shutdown, and routing out of the box.
+
+---
+
+## Model config should have one source of truth — settings.json
+
+**Date:** 2026-06-08
+**Trigger:** PI_MODEL env var in docker-compose.yml, PI_MODEL default in server.mjs, defaultModel in settings.json, and modelRoles in config.yml all needed to agree. Three of those are redundant. When upgrading from V4 Flash to V4 Pro, had to edit 4 places per agent.
+**Rule:** settings.json is the source of truth for model identity. server.mjs reads it at boot. PI_MODEL/PI_PROVIDER env vars are accepted as optional operational overrides but should not be set in docker-compose. config.yml modelRoles must agree with settings.json.
+**How to apply:** After any model change, the workflow is: update settings.json + config.yml per agent, rebuild containers. No docker-compose or server.mjs edits needed.
+
+---
+
 ## E2E tests must give goals, not imperative instructions
 
 **Date:** 2026-06-07

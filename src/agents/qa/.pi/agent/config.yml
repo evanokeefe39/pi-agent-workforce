@@ -1,7 +1,8 @@
 modelRoles:
   smol:    groq/llama-3.1-8b-instant
-  default: deepseek/deepseek-v4-flash
-  agentic: deepseek/deepseek-v4-flash
+  fast:    deepseek/deepseek-v4-flash
+  default: deepseek/deepseek-v4-pro
+  agentic: deepseek/deepseek-v4-pro
   plan:    deepseek/deepseek-v4-pro
   review:  deepseek/deepseek-v4-pro
   commit:  groq/llama-3.1-8b-instant
@@ -12,14 +13,18 @@ retry:
   fallbackChains:
     smol:
       - groq/llama-3.1-8b-instant
-    default:
+    fast:
       - deepseek/deepseek-v4-flash
       - openrouter/meta-llama/llama-3.3-70b-instruct:free
       - openrouter/openai/gpt-oss-120b:free
-    agentic:
+    default:
+      - deepseek/deepseek-v4-pro
+      - openrouter/moonshotai/kimi-k2.6:free
       - deepseek/deepseek-v4-flash
-      - openrouter/meta-llama/llama-3.3-70b-instruct:free
-      - openrouter/z-ai/glm-4.5-air:free
+    agentic:
+      - deepseek/deepseek-v4-pro
+      - openrouter/moonshotai/kimi-k2.6:free
+      - deepseek/deepseek-v4-flash
     plan:
       - deepseek/deepseek-v4-pro
       - openrouter/deepseek/deepseek-r1:free

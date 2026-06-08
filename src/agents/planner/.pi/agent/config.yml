@@ -14,9 +14,11 @@ retry:
       - groq/llama-3.1-8b-instant
     default:
       - deepseek/deepseek-v4-pro
+      - openrouter/moonshotai/kimi-k2.6:free
       - openrouter/openai/gpt-oss-120b:free
     agentic:
       - deepseek/deepseek-v4-pro
+      - openrouter/moonshotai/kimi-k2.6:free
       - openrouter/openai/gpt-oss-120b:free
     plan:
       - deepseek/deepseek-v4-pro
