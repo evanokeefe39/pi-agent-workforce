@@ -15,7 +15,9 @@ start here, then propagate to config files, then rebuild containers.
 | 2026-06-08 | Cerebras removed entirely | Dropped Qwen3 32B, Llama 3.3 70B, Llama 3.1 8B from API. Only GPT-OSS 120B and GLM-4.7 remain, both with 8K context cap on free tier |
 | 2026-06-08 | Groq demoted from primary to smol-only | Free tier TPM limits (6K for Qwen3, 12K for Llama 3.3) too low for fully-loaded agent system prompts (~15K tokens) |
 | 2026-06-08 | OpenRouter selected as primary provider | No TPM limit, 131K+ context, free models with tool-calling support |
-| 2026-06-08 | deepseek-chat/deepseek-reasoner flagged for migration | Aliases retiring 2026-07-24. Migrate to deepseek-v4-flash / deepseek-v4-pro |
+| 2026-06-08 | DeepSeek V4 Flash selected as primary worker model | $0.14/M, no rate limits, 1M context, 98% cache discount. Free tier rate limits (Groq TPM, OpenRouter RPD) are persistent friction across projects |
+| 2026-06-08 | DeepSeek V4 Pro selected as planner model | Replaces deepseek-reasoner (retiring 2026-07-24) |
+| 2026-06-08 | OpenRouter free models as fallback chain | meta-llama/llama-3.3-70b-instruct:free, openai/gpt-oss-120b:free, z-ai/glm-4.5-air:free |
 
 ## Approved models
 

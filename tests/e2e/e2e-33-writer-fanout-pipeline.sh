@@ -148,16 +148,19 @@ OUTPUT_LEN=${#OUTPUT}
 check "Output non-empty (${OUTPUT_LEN} chars)" "$([ $OUTPUT_LEN -gt 100 ] && echo true || echo false)"
 
 # 3. Contains section headings (evidence of multi-section document)
-HAS_HEADINGS=$(echo "$OUTPUT" | grep -c '^##' 2>/dev/null || echo 0)
-check "Has section headings ($HAS_HEADINGS found)" "$([ $HAS_HEADINGS -ge 2 ] && echo true || echo false)"
+HAS_HEADINGS=$(echo "$OUTPUT" | grep -c '^##' 2>/dev/null || true)
+HAS_HEADINGS=${HAS_HEADINGS:-0}
+check "Has section headings ($HAS_HEADINGS found)" "$([ "$HAS_HEADINGS" -ge 2 ] && echo true || echo false)"
 
 # 4. Contains data citations (evidence findings were used)
-HAS_CITATIONS=$(echo "$OUTPUT" | grep -ci 'percent\|%\|340\|2\.3x\|45%\|4\.2x\|28%' 2>/dev/null || echo 0)
-check "Contains data citations ($HAS_CITATIONS matches)" "$([ $HAS_CITATIONS -ge 2 ] && echo true || echo false)"
+HAS_CITATIONS=$(echo "$OUTPUT" | grep -ci 'percent\|%\|340\|2\.3x\|45%\|4\.2x\|28%' 2>/dev/null || true)
+HAS_CITATIONS=${HAS_CITATIONS:-0}
+check "Contains data citations ($HAS_CITATIONS matches)" "$([ "$HAS_CITATIONS" -ge 2 ] && echo true || echo false)"
 
 # 5. No AI tell words
-AI_TELLS=$(echo "$OUTPUT" | grep -ci 'delve\|tapestry\|multifaceted\|utilize\|harness\|leverage' 2>/dev/null || echo 0)
-check "No AI tell words ($AI_TELLS found)" "$([ $AI_TELLS -eq 0 ] && echo true || echo false)"
+AI_TELLS=$(echo "$OUTPUT" | grep -ci 'delve\|tapestry\|multifaceted\|utilize\|harness\|leverage' 2>/dev/null || true)
+AI_TELLS=${AI_TELLS:-0}
+check "No AI tell words ($AI_TELLS found)" "$([ "$AI_TELLS" -eq 0 ] && echo true || echo false)"
 
 # 6. Completed within timeout
 check "Completed within timeout" "$([ "$STATE" != "timeout" ] && echo true || echo false)"

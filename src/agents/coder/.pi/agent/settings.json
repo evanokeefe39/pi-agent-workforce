@@ -12,8 +12,8 @@
   "followUpMode": "all",
   "quietStartup": true,
   "theme": "dark",
-  "defaultProvider": "groq",
-  "defaultModel": "qwen/qwen3-32b",
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-flash",
   "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": false

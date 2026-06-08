@@ -1,9 +1,9 @@
 modelRoles:
   smol:    groq/llama-3.1-8b-instant
-  default: groq/qwen/qwen3-32b
-  agentic: groq/qwen/qwen3-32b
-  plan:    deepseek/deepseek-reasoner
-  review:  deepseek/deepseek-reasoner
+  default: deepseek/deepseek-v4-flash
+  agentic: deepseek/deepseek-v4-flash
+  plan:    deepseek/deepseek-v4-pro
+  review:  deepseek/deepseek-v4-pro
   commit:  groq/llama-3.1-8b-instant
 
 retry:
@@ -12,22 +12,19 @@ retry:
   fallbackChains:
     smol:
       - groq/llama-3.1-8b-instant
-      - nvidia/meta/llama-3.1-8b-instruct
     default:
-      - groq/qwen/qwen3-32b
-      - groq/llama-3.3-70b-versatile
-      - openrouter/meta-llama/llama-4-maverick:free
+      - deepseek/deepseek-v4-flash
+      - openrouter/meta-llama/llama-3.3-70b-instruct:free
+      - openrouter/openai/gpt-oss-120b:free
     agentic:
-      - groq/qwen/qwen3-32b
-      - groq/llama-3.3-70b-versatile
-      - nvidia/meta/llama-4-maverick-17b-128e-instruct
+      - deepseek/deepseek-v4-flash
+      - openrouter/meta-llama/llama-3.3-70b-instruct:free
+      - openrouter/z-ai/glm-4.5-air:free
     plan:
-      - deepseek/deepseek-reasoner
-      - groq/qwen/qwen3-32b
+      - deepseek/deepseek-v4-pro
       - openrouter/deepseek/deepseek-r1:free
     review:
-      - deepseek/deepseek-reasoner
-      - groq/qwen/qwen3-32b
+      - deepseek/deepseek-v4-pro
       - openrouter/deepseek/deepseek-r1:free
     commit:
       - groq/llama-3.1-8b-instant

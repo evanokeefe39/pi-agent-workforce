@@ -11,7 +11,7 @@
   "quietStartup": true,
   "theme": "dark",
   "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-reasoner",
+  "defaultModel": "deepseek-v4-pro",
   "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": true

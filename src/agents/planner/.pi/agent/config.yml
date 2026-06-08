@@ -1,32 +1,29 @@
 modelRoles:
   smol:    groq/llama-3.1-8b-instant
-  default: deepseek/deepseek-reasoner
-  agentic: deepseek/deepseek-reasoner
-  plan:    deepseek/deepseek-reasoner
-  review:  deepseek/deepseek-reasoner
+  default: deepseek/deepseek-v4-pro
+  agentic: deepseek/deepseek-v4-pro
+  plan:    deepseek/deepseek-v4-pro
+  review:  deepseek/deepseek-v4-pro
   commit:  groq/llama-3.1-8b-instant
 
 retry:
   enabled: true
   maxRetries: 5
   fallbackChains:
-    default:
-      - deepseek/deepseek-reasoner
-      - groq/qwen/qwen3-32b
-      - openrouter/deepseek/deepseek-r1:free
-    agentic:
-      - deepseek/deepseek-reasoner
-      - groq/qwen/qwen3-32b
-      - groq/llama-3.3-70b-versatile
-    plan:
-      - deepseek/deepseek-reasoner
-      - groq/qwen/qwen3-32b
-      - openrouter/deepseek/deepseek-r1:free
-    review:
-      - deepseek/deepseek-reasoner
-      - groq/qwen/qwen3-32b
     smol:
       - groq/llama-3.1-8b-instant
+    default:
+      - deepseek/deepseek-v4-pro
+      - openrouter/openai/gpt-oss-120b:free
+    agentic:
+      - deepseek/deepseek-v4-pro
+      - openrouter/openai/gpt-oss-120b:free
+    plan:
+      - deepseek/deepseek-v4-pro
+      - openrouter/deepseek/deepseek-r1:free
+    review:
+      - deepseek/deepseek-v4-pro
+      - openrouter/deepseek/deepseek-r1:free
     commit:
       - groq/llama-3.1-8b-instant
   fallbackRevertPolicy: cooldown-expiry

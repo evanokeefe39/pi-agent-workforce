@@ -133,7 +133,7 @@ services:
     environment:
       AGENT_NAME: "planner"
       PI_PROVIDER: "deepseek"
-      PI_MODEL: "deepseek-reasoner"
+      PI_MODEL: "deepseek-v4-pro"
       WORKSPACE: "default"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
       BRIDGE_TIMEOUT_MS: "1800000"

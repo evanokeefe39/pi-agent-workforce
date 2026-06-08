@@ -15,8 +15,10 @@
       "baseUrl": "https://api.deepseek.com/v1",
       "apiKey": "$DEEPSEEK_API_KEY",
       "models": [
-        { "id": "deepseek-chat", "name": "DeepSeek V3" },
-        { "id": "deepseek-reasoner", "name": "DeepSeek R1" }
+        { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash" },
+        { "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro" },
+        { "id": "deepseek-chat", "name": "DeepSeek V3 (retiring 2026-07-24)" },
+        { "id": "deepseek-reasoner", "name": "DeepSeek R1 (retiring 2026-07-24)" }
       ]
     },
     "cerebras": {
@@ -48,9 +50,11 @@
       "baseUrl": "https://openrouter.ai/api/v1",
       "apiKey": "$OPENROUTER_API_KEY",
       "models": [
+        { "id": "meta-llama/llama-3.3-70b-instruct:free", "name": "Llama 3.3 70B (free)" },
+        { "id": "openai/gpt-oss-120b:free", "name": "GPT-OSS 120B (free)" },
+        { "id": "z-ai/glm-4.5-air:free", "name": "GLM 4.5 Air (free)" },
         { "id": "qwen/qwen3-coder:free", "name": "Qwen3 Coder (free)" },
-        { "id": "deepseek/deepseek-r1:free", "name": "DeepSeek R1 (free)" },
-        { "id": "meta-llama/llama-4-maverick:free", "name": "Llama 4 Maverick (free)" }
+        { "id": "deepseek/deepseek-r1:free", "name": "DeepSeek R1 (free)" }
       ]
     },
     "mistral": {

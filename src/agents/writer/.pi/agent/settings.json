@@ -12,8 +12,8 @@
   "followUpMode": "all",
   "quietStartup": true,
   "theme": "dark",
-  "defaultProvider": "groq",
-  "defaultModel": "llama-3.3-70b-versatile",
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-flash",
   "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": false

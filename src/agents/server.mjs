@@ -11,8 +11,8 @@ const {
 } = await import(SDK_PATH);
 
 const PORT = process.env.BRIDGE_PORT || 8080;
-const PI_PROVIDER = process.env.PI_PROVIDER || "groq";
-const PI_MODEL = process.env.PI_MODEL || "qwen/qwen3-32b";
+const PI_PROVIDER = process.env.PI_PROVIDER || "deepseek";
+const PI_MODEL = process.env.PI_MODEL || "deepseek-v4-flash";
 const BRIDGE_TIMEOUT_MS = parseInt(process.env.BRIDGE_TIMEOUT_MS, 10) || 120000;
 const VERSION = "3.0.0";
 const COST_REPORT_URL = process.env.COST_REPORT_URL || "";

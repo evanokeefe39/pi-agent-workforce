@@ -2,7 +2,7 @@
 name: section-writer
 description: Writes and polishes one document section from a brief file. Produces a clean, style-compliant section ready for assembly.
 tools: read, write, bash
-model: groq/qwen/qwen3-32b
+model: deepseek/deepseek-v4-flash
 thinking: medium
 max_turns: 12
 context: fresh
