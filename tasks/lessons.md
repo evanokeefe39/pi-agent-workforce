@@ -56,6 +56,15 @@
 
 ---
 
+## settings.json defaultModel overrides config.yml modelRoles — keep them aligned
+
+**Date:** 2026-06-08
+**Trigger:** Writer test ran on deepseek-chat instead of cerebras/qwen-3-32b. Root cause: settings.json had `defaultModel: "deepseek-chat"` (leftover from initial setup) while config.yml had `default: cerebras/qwen-3-32b`. Pi CLI uses settings.json defaultModel as the runtime default; config.yml modelRoles only apply when explicitly requesting a role.
+**Rule:** When changing the primary model for an agent, update BOTH settings.json (defaultProvider + defaultModel) AND config.yml (modelRoles.default + modelRoles.agentic + fallbackChains). These files serve different purposes but must agree on which model is primary. The settings.json defaultModel is what actually runs; config.yml defines role-specific routing and fallback chains.
+**How to apply:** After any model change, grep all agents for the old model identifier. Use E2E-32's model validation test to catch drift: it checks /describe for the expected model string.
+
+---
+
 ## E2E tests must give goals, not imperative instructions
 
 **Date:** 2026-06-07

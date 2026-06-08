@@ -111,5 +111,6 @@ RUN curl -sfL --retry 3 --retry-delay 2 -o /tmp/vale.tar.gz \
 
 FROM writer-deps AS writer
 COPY writer/.pi/agent/ /root/.pi/agent/
+COPY writer/.pi/agents/ /root/.pi/agents/
 COPY writer/agent.json /app/writer/agent.json
 COPY data/style/ /app/data/style/

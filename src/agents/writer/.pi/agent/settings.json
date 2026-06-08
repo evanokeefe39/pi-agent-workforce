@@ -12,8 +12,8 @@
   "followUpMode": "all",
   "quietStartup": true,
   "theme": "dark",
-  "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-chat",
+  "defaultProvider": "cerebras",
+  "defaultModel": "qwen-3-32b",
   "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": false
