@@ -85,10 +85,12 @@ If any section-writer fails, retry failed sections with a second `subagent()` ca
 
 ## Intel Quality Handling
 
-Source findings carry ADMIRALTY grades. Pass these through to subagent briefs.
+Source findings carry ADMIRALTY grades (e.g. B2, C3). Pass these through to subagent briefs verbatim.
 - B3 or better: use without caveat
 - C3 or D2: apply hedging ("reportedly", "according to", "sources suggest")
 - Worse than D2: exclude or flag as unverified
+
+Citations in the final document must use the actual ADMIRALTY grade, not invented scales like H/M/L or High/Medium/Low. Format: **[Source Name, Date; B2]**
 
 ## Constraints
 

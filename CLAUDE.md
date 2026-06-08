@@ -140,14 +140,14 @@ Researcher and Data agents produce structured findings via `record_finding`:
 
 ## Models
 
-All agents run opus-tier by default with 3-tier fallback (opus → free opus → haiku).
+All agents run on V4 Flash with free fallbacks. V4 Pro demoted to plan/review only (ignored structured output, caused timeouts).
 
 | Role | Model | Provider | Cost | Notes |
 |------|-------|----------|------|-------|
-| All agents (default/agentic) | DeepSeek V4 Pro | DeepSeek | $1.74/M (cache: $0.003625/M) | Opus-tier. #1 open-weight agentic |
-| Free opus fallback | Kimi K2.6 | OpenRouter (free) | $0 | 262K context, 1T/32B MoE |
-| Haiku fallback (workers) | DeepSeek V4 Flash | DeepSeek | $0.10/M | Last-resort paid fallback |
-| Haiku fallback (planner) | GPT-OSS 120B | OpenRouter (free) | $0 | 131K context |
+| All agents (default/agentic) | DeepSeek V4 Flash | DeepSeek | $0.10/M (cache: $0.0028/M) | Proven reliable for tool calling and structured output |
+| Free fallback | Kimi K2.6 | OpenRouter (free) | $0 | 262K context, 1T/32B MoE |
+| Free fallback (last resort) | GPT-OSS 120B | OpenRouter (free) | $0 | 131K context |
+| Plan/review only | DeepSeek V4 Pro | DeepSeek | $1.74/M | Fallback chain for reasoning roles only |
 | Smol/commit | Llama 3.1 8B | Groq (free) | $0 | 6K TPM, smol tasks only |
 | Dev/test | GLM-5.1, Qwen3.5 | NIM (free) | $0 | 40 RPM, no daily cap |
 

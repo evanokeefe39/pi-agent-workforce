@@ -29,6 +29,7 @@ Follow the style_block from the brief exactly. Additionally:
   - B3 or better: state as fact
   - C3 or D2: hedge ("reportedly", "according to", "sources suggest")
   - Worse than D2: exclude or flag as unverified
+- Citation format: **[Source Name, Date; ADMIRALTY grade]** — use the actual grade from the finding (e.g. B2, C3), never H/M/L or other invented scales. Multiple sources: **[Source1, Date (B2); Source2, Date (C3)]**
 - Match the word_target within 20%. Do not pad with filler to hit count
 - Use contractions unless the brief says otherwise
 

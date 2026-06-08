@@ -83,6 +83,24 @@
 
 ---
 
+## V4 Pro fails agentic tasks — benchmark rankings don't predict production behavior
+
+**Date:** 2026-06-08
+**Trigger:** Upgraded all agents from V4 Flash to V4 Pro (#1 on Artificial Analysis agentic index). Researcher on V4 Pro ignored structured output requirements — 42 turns of markdown reports, 0 findings, despite identical AGENTS.md that V4 Flash follows perfectly. Writer on V4 Pro timed out at 600s twice. Same researcher task completed in 4 minutes with 30 structured findings on V4 Flash. V4 Pro also exhibits possible shared rate limiting under high platform traffic (500 concurrency pool vs Flash's 2500).
+**Rule:** Benchmark rankings (agentic index, BFCL) measure capability in controlled settings, not reliability in production. A model that scores higher on tool-calling benchmarks may still ignore system prompt constraints in long-running agentic sessions. The only valid test is running the actual pipeline with the actual prompts. When upgrading models, run E2E-30 (full planner pipeline) before committing — it tests autonomous behavior under abstract briefs, which is where regressions appear.
+**How to apply:** Never upgrade the default model based on benchmark data alone. Run E2E-30 with the new model. If researcher produces 0 findings or agents timeout, the model is not production-ready regardless of its benchmark score. V4 Pro is retained in plan/review fallback chains where its reasoning helps, but not as default/agentic.
+
+---
+
+## Programmatic output validation needed — prompt-only enforcement fails across model changes
+
+**Date:** 2026-06-08
+**Trigger:** Researcher AGENTS.md says "If you complete a task with only a markdown report and no structured findings, you have not met the standard." V4 Flash follows this. V4 Pro ignores it. The instruction has no programmatic teeth — the server marks any completed session as "completed" regardless of output quality.
+**Rule:** Any mandatory output requirement (researcher must produce JSONL findings, writer must produce report artifact) needs programmatic enforcement, not just prompt language. Prompt-only constraints are model-dependent and will break on model upgrades. Mid-run enforcement (checking findings count after N turns) is better than post-run validation (checking after 42 wasted turns).
+**How to apply:** Implement output validation in the agent process. For researcher: after turn N (e.g. 5), if query_findings returns 0, inject a correction or abort. For writer: check write_artifact was called before marking complete. The server should not report "completed" for a run that produced no required artifacts.
+
+---
+
 ## E2E tests must give goals, not imperative instructions
 
 **Date:** 2026-06-07

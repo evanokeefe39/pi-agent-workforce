@@ -13,7 +13,7 @@
   "quietStartup": true,
   "theme": "dark",
   "defaultProvider": "deepseek",
-  "defaultModel": "deepseek-v4-pro",
+  "defaultModel": "deepseek-v4-flash",
   "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": false

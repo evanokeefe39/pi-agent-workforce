@@ -18,27 +18,48 @@ start here, then propagate to config files, then rebuild containers.
 | 2026-06-08 | 3-tier fallback chains: opus → free opus → haiku | V4 Pro → Kimi K2.6:free → V4 Flash for workers; V4 Pro → Kimi K2.6:free → GPT-OSS:free for planner |
 | 2026-06-08 | NIM integrated as dev/test provider | 40 RPM free (upgradable to 200), no daily cap. GLM-5, GLM-5.1, Qwen3.5 models available |
 | 2026-06-08 | Cerebras, MiniMax, Mistral removed from provider catalog | Dead or unused. Keeps models.json clean |
+| 2026-06-08 | V4 Pro demoted from default to plan/review only | V4 Pro failed agentic tasks: researcher ignored structured output requirements (42 turns of markdown, 0 findings), writer timed out at 600s twice. V4 Flash completed same tasks in 4 min with 30 findings. Cause unclear — may be model behavior regression or DeepSeek shared rate limiting under high V4 Pro traffic |
+| 2026-06-08 | All agents reverted to V4 Flash as default/agentic | V4 Flash proven reliable for tool calling and structured output. V4 Pro retained in plan/review fallback chains only |
 
 ## Model tier architecture
 
-All agents run at opus-tier by default. Fallback chains degrade gracefully through
-free opus alternatives down to haiku-tier paid models.
+All agents run on V4 Flash by default. V4 Pro is retained for plan/review roles
+only (fallback chains). V4 Pro was tested as primary but failed: ignored structured
+output requirements, caused timeouts, and exhibited possible shared rate limiting
+under load.
 
-### Tier 3 — Opus equivalent (primary for all agents)
+**DeepSeek shared rate limiting caveat:** DeepSeek rate limits are shared across all
+users, not per-account. Under high platform traffic, V4 Pro (smaller concurrency
+pool: 500 vs V4 Flash's 2500) may experience degraded latency or throttling even
+when your account is well within limits. This makes V4 Pro unreliable as a default
+model for time-sensitive agentic workloads.
+
+### Primary — DeepSeek V4 Flash (all agents default/agentic)
 
 | Model | Provider | Cost (input/output per MTok) | Context | Notes |
 |-------|----------|------------------------------|---------|-------|
-| DeepSeek V4 Pro | DeepSeek | $1.74 / $3.48 | 1M | #1 open-weight on Artificial Analysis agentic index. Cache hits: $0.003625/M |
-| Kimi K2.6 | OpenRouter (free) | $0 | 262K | 1T total / 32B active MoE. Free fallback for opus tier |
-| GLM-5.1 | NIM (free) | $0 | 203K | Best for long-running software agents. Dev/test only |
-| GLM-5 | NIM (free) | $0 | 203K | 744B / 40B active. Dev/test only |
+| DeepSeek V4 Flash | DeepSeek | $0.10 / $0.20 | 1M | Proven reliable for tool calling and structured output. Cache: $0.0028/M. 2500 concurrency |
 
-### Tier 1 — Haiku equivalent (fallback / smol tasks)
+### Fallback — free models
 
 | Model | Provider | Cost | Context | Notes |
 |-------|----------|------|---------|-------|
-| DeepSeek V4 Flash | DeepSeek | $0.10 / $0.20 | 1M | Last-resort fallback for workers. Cache: $0.0028/M |
+| Kimi K2.6 | OpenRouter (free) | $0 | 262K | 1T total / 32B active MoE. Free fallback |
+| GPT-OSS 120B | OpenRouter (free) | $0 | 131K | Last-resort free fallback |
 | Llama 3.1 8B | Groq (free) | $0 | 128K | Smol/commit role only. 6K TPM limit |
+
+### Plan/review only — DeepSeek V4 Pro
+
+| Model | Provider | Cost | Context | Notes |
+|-------|----------|------|---------|-------|
+| DeepSeek V4 Pro | DeepSeek | $1.74 / $3.48 | 1M | Reserved for plan/review roles in fallback chains. Not used as default — see decision log |
+
+### Dev/test — NIM
+
+| Model | Provider | Cost | Context | Notes |
+|-------|----------|------|---------|-------|
+| GLM-5.1 | NIM (free) | $0 | 203K | Best for long-running software agents. Dev/test only |
+| GLM-5 | NIM (free) | $0 | 203K | 744B / 40B active. Dev/test only |
 | Qwen3.5 122B (10B active) | NIM (free) | $0 | 262K | Fast dev iteration. Dev/test only |
 
 ### Tier 2 — Sonnet equivalent (future / not yet integrated)
@@ -54,12 +75,11 @@ free opus alternatives down to haiku-tier paid models.
 ### All agents (default/agentic roles)
 
 ```
-DeepSeek V4 Pro ($1.74/M)
+DeepSeek V4 Flash ($0.10/M)
   ↓ fail
 Kimi K2.6:free (OpenRouter, 262K)
   ↓ fail
-DeepSeek V4 Flash ($0.10/M)   ← workers
-GPT-OSS 120B:free              ← planner
+GPT-OSS 120B:free (OpenRouter)
 ```
 
 ### Plan/review roles
@@ -78,13 +98,13 @@ Groq Llama 3.1 8B (free)
 
 ## Cost analysis with caching
 
-DeepSeek V4 Pro cache hits cost $0.003625/M — a 99.8% discount on input. System
+DeepSeek V4 Flash cache hits cost $0.0028/M — a 97% discount on input. System
 prompts (10-15K tokens) are identical across invocations and cache automatically.
 
 Per-task cost estimate (3 workers, 20 requests each, 15K input):
-- First request per agent: ~$0.026 (cold cache)
-- Subsequent requests: ~$0.009 (system prompt cached)
-- Total per task: ~$0.60 (vs ~$0.03 with V4 Flash)
+- First request per agent: ~$0.0015 (cold cache)
+- Subsequent requests: ~$0.0005 (system prompt cached)
+- Total per task: ~$0.03
 
 ## NIM dev/test strategy
 
@@ -115,8 +135,7 @@ modelRoles:
 | Phase | Primary | Fallback | Cost |
 |-------|---------|----------|------|
 | Dev/test | NIM free (40 RPM) | OpenRouter :free | $0 |
-| Staging | DeepSeek V4 Pro (paid) | — | ~$1.74/MTok |
-| Production | DeepSeek V4 Pro (paid) | Kimi K2.6:free → V4 Flash | ~$1.74/MTok (cache: $0.003625) |
+| Production | DeepSeek V4 Flash (paid) | Kimi K2.6:free → GPT-OSS:free | ~$0.10/MTok (cache: $0.0028) |
 
 ## Provider catalog
 
@@ -190,6 +209,7 @@ system prompts.
 | All Cerebras models | Cerebras | Provider dropped all viable models from API | 2026-06-08 |
 | All MiniMax models | MiniMax | Provider removed from catalog. M3 available for future testing | 2026-06-08 |
 | All Mistral models | Mistral | Not used, removed to keep catalog clean | 2026-06-08 |
+| DeepSeek V4 Pro (as default) | DeepSeek | Ignored structured output requirements (researcher: 42 turns, 0 findings). Writer timeout at 600s. Possible shared rate limiting. Retained for plan/review only | 2026-06-08 |
 
 ## Configuration files
 

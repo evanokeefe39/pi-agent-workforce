@@ -208,20 +208,10 @@ artifact_content() {
 }
 
 # Count structured findings in JSONL artifact(s)
+# Uses Node.js helper to avoid bash pipe/stdin issues with curl loops
 artifact_findings_count() {
   local query="${1:-artifact_type=dataset}"
-  local total=0
-  local ids
-  ids=$(artifact_list "$query" | jq -r '.[].id // empty' 2>/dev/null || echo "")
-  if [ -z "$ids" ]; then echo 0; return; fi
-  for id in $ids; do
-    local count
-    count=$(artifact_content "$id" | grep -c '"claim"' 2>/dev/null || true)
-    count=${count//[^0-9]/}
-    count=${count:-0}
-    total=$((total + count))
-  done
-  echo "$total"
+  node "$SCRIPT_DIR/artifact-query.mjs" findings_count "$query" 2>/dev/null || echo 0
 }
 
 # Snapshot artifact count (call before test, compare after)
