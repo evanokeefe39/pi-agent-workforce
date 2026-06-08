@@ -30,6 +30,7 @@ const COST_REPORT_URL = process.env.COST_REPORT_URL || "";
 const COST_REPORT_KEY = process.env.COST_REPORT_KEY || "";
 const AGENT_ID = process.env.AGENT_ID || "";
 const WORKSPACE_ID = process.env.WORKSPACE_ID || "";
+const ARTIFACT_SERVICE_URL = process.env.ARTIFACT_SERVICE_URL || "";
 
 let piProvider = "unknown";
 let piModel = "unknown";
@@ -47,6 +48,7 @@ const logger = createLogger({ service: SERVICE_NAME });
 // --- Agent metadata ---
 
 let agentMeta = { name: AGENT_NAME, description: "", role: "", capabilities: "" };
+let validationConfig = { maxTurns: 0, requiredTools: [], requiredArtifactType: "" };
 try {
   const raw = readFileSync(`/app/${AGENT_NAME}/agent.json`, "utf-8");
   const parsed = JSON.parse(raw);
@@ -55,6 +57,12 @@ try {
     description: parsed.title || "",
     role: parsed.role || "",
     capabilities: parsed.capabilities || "",
+  };
+  const v = parsed.runtimeConfig?.validation || {};
+  validationConfig = {
+    maxTurns: v.maxTurns || 0,
+    requiredTools: v.requiredTools || [],
+    requiredArtifactType: v.requiredArtifactType || "",
   };
 } catch { /* agent.json not found */ }
 
@@ -215,6 +223,7 @@ async function processInvocation(body, traceId, requestStart, abortController) {
   log("info", "session_created", { session_id: sessionId, trace_id: traceId, correlation_id: body.correlationId || null });
 
   const usageByTurn = [];
+  const toolCalls = {};
   let output = "";
   let eventCount = 0;
 
@@ -226,6 +235,10 @@ async function processInvocation(body, traceId, requestStart, abortController) {
       if (delta?.type === "text_delta") output += delta.delta;
     }
 
+    if (event.type === "tool_execution_end" && event.toolName) {
+      toolCalls[event.toolName] = (toolCalls[event.toolName] || 0) + 1;
+    }
+
     if (event.type === "turn_end" && event.message?.usage) {
       usageByTurn.push({
         provider: event.message.provider || piProvider,
@@ -234,7 +247,26 @@ async function processInvocation(body, traceId, requestStart, abortController) {
         output: event.message.usage.output || 0,
         cacheRead: event.message.usage.cacheRead || 0,
       });
-      trackRun(traceId, { turnCount: usageByTurn.length });
+      const turnCount = usageByTurn.length;
+      trackRun(traceId, { turnCount });
+
+      // Jidoka: turn count circuit breaker
+      if (validationConfig.maxTurns > 0 && turnCount >= validationConfig.maxTurns) {
+        log("error", "andon_max_turns", {
+          trace_id: traceId, turns: turnCount, limit: validationConfig.maxTurns,
+        });
+        abortController.abort();
+      }
+
+      // Jidoka: mid-run required tool check
+      if (validationConfig.requiredTools.length > 0 && turnCount > 0 && turnCount % 10 === 0) {
+        const missing = validationConfig.requiredTools.filter(t => !toolCalls[t]);
+        if (missing.length > 0) {
+          log("warn", "andon_missing_tools", {
+            trace_id: traceId, turns: turnCount, missing, toolCalls,
+          });
+        }
+      }
     }
   });
 
@@ -296,6 +328,65 @@ async function processInvocation(body, traceId, requestStart, abortController) {
   });
 
   reportCostEvent(usage).catch(() => {});
+
+  // Jidoka: zero-output detection
+  if (usage.outputTokens === 0) {
+    log("error", "andon_zero_output", {
+      trace_id: traceId, model: usage.model, provider: usage.provider, turns: usage.turns,
+    });
+    trackRun(traceId, {
+      status: "failed", completedAt: new Date().toISOString(), output,
+      usage, sessionId, error: "zero output tokens — model returned empty response",
+    });
+    releaseSlot();
+    return;
+  }
+
+  // Jidoka: required tool check (post-run)
+  if (validationConfig.requiredTools.length > 0) {
+    const missing = validationConfig.requiredTools.filter(t => !toolCalls[t]);
+    if (missing.length > 0) {
+      log("error", "andon_required_tools_missing", {
+        trace_id: traceId, missing, toolCalls, turns: usage.turns,
+      });
+      trackRun(traceId, {
+        status: "failed", completedAt: new Date().toISOString(), output,
+        usage, sessionId,
+        error: `required tools never called: ${missing.join(", ")}`,
+      });
+      releaseSlot();
+      return;
+    }
+  }
+
+  // Jidoka: required artifact type check (post-run)
+  if (validationConfig.requiredArtifactType && ARTIFACT_SERVICE_URL) {
+    try {
+      const resp = await fetch(
+        `${ARTIFACT_SERVICE_URL}/artifacts?run_id=${sessionId}&artifact_type=${validationConfig.requiredArtifactType}&limit=1`,
+        { headers: { "x-agent-name": AGENT_NAME } }
+      );
+      if (resp.ok) {
+        const arts = await resp.json();
+        if (arts.length === 0) {
+          log("error", "andon_missing_artifact", {
+            trace_id: traceId, required_type: validationConfig.requiredArtifactType,
+            session_id: sessionId, turns: usage.turns,
+          });
+          trackRun(traceId, {
+            status: "failed", completedAt: new Date().toISOString(), output,
+            usage, sessionId,
+            error: `no ${validationConfig.requiredArtifactType} artifact produced`,
+          });
+          releaseSlot();
+          return;
+        }
+      }
+    } catch (err) {
+      log("warn", "artifact_check_failed", { error: err.message, trace_id: traceId });
+    }
+  }
+
   trackRun(traceId, { status: "completed", completedAt: new Date().toISOString(), output, usage, sessionId });
   releaseSlot();
 }

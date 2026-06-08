@@ -61,23 +61,32 @@
 ### 2a. Define data agent's role clearly
 - Receives: raw scraped data (JSON/CSV from Apify), artifact URIs from researcher
 - Produces: statistical summaries, trend analysis, comparative tables, structured datasets
-- Tools: DuckDB extension (already installed), read_artifact, write_artifact
+- Tools: Python (code execution), DuckDB (SQL), read_artifact, write_artifact
 - NOT a scraper — researcher/Apify scrapes, data agent analyzes
+- NOT an LLM-judgment agent — researcher uses LLM to interpret and grade sources, data agent uses code to compute
 
-### 2b. Write AGENTS.md
-- Input: artifact URIs containing raw data
-- Output: analysis artifacts (type: dataset) with structured findings
-- Workflow: read artifacts → load into DuckDB → query → record_finding → write_artifact
-- Self-planning: decompose analysis into dimensions, create tasks
+### 2b. Analysis workflow (code-first, not LLM-first)
+- LLM role: orchestrate — decide what to analyze, write Python/SQL, interpret results, record findings
+- Python role: ingest data from artifact service, reshape, clean, transform
+- DuckDB role: SQL queries over ingested data — aggregations, joins, statistical summaries
+- Output: result sets (CSV/JSONL artifacts) + findings that link source data → result set → claim
+- Lineage: every finding must reference the source artifact ID + the query/code that produced it
 
-### 2c. Test with sample data
-- Load E2E-30's findings JSONL into data agent
-- Ask: "Analyze source reliability distribution, identify which claims have strongest/weakest backing"
-- Verify: produces structured analysis artifact
+### 2c. Container setup
+- Python already installed in data container (inherited from researcher-deps)
+- DuckDB node API already installed (`npm install -g @duckdb/node-api`)
+- Need: Python DuckDB package (`pip install duckdb`), artifact service client for Python (simple HTTP)
+- Data agent needs code execution permission (bash/python) — already has it via Pi SDK
+
+### 2d. Test with sample data
+- Load E2E-30's findings JSONL into data agent via artifact URI
+- Ask: "Analyze source reliability distribution, identify which claims have strongest/weakest backing, produce a summary table"
+- Verify: produces analysis artifact with SQL/Python code trail, not LLM prose
 
 **Files to change:**
-- `src/agents/data/.pi/agent/AGENTS.md` — rewrite with analysis focus
+- `src/agents/data/.pi/agent/AGENTS.md` — rewrite with code-first analysis focus
 - `src/agents/data/agent.json` — update capabilities description
+- `src/agents/Dockerfile` — add `pip install duckdb` to data-deps stage
 
 ---
 
@@ -96,12 +105,12 @@
 ## Status
 
 - [x] 4. ISSUES/MILESTONE cleanup
-- [ ] 1. Jidoka hooks
-  - [ ] 1a. Zero-output detection
-  - [ ] 1b. Researcher mid-run validation
-  - [ ] 1c. Writer post-run validation
-  - [ ] 1d. Turn count circuit breaker
-  - [ ] 1e. Planner delegation validation
+- [x] 1. Jidoka hooks
+  - [x] 1a. Zero-output detection — server.mjs fails run on 0 output tokens
+  - [x] 1b. Researcher mid-run validation — warns every 10 turns if required tools not called
+  - [x] 1c. Writer post-run validation — checks artifact service for report artifact
+  - [x] 1d. Turn count circuit breaker — aborts via AbortController at maxTurns
+  - [ ] 1e. Planner delegation validation — prompt-level, deferred
 - [ ] 2. Data agent implementation
   - [ ] 2a. Role definition
   - [ ] 2b. AGENTS.md

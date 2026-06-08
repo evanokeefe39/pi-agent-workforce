@@ -11,6 +11,11 @@
     "timeoutSec": 300
   },
   "runtimeConfig": {
-    "heartbeat": { "enabled": false, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 }
+    "heartbeat": { "enabled": false, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 },
+    "validation": {
+      "maxTurns": 50,
+      "requiredTools": ["write_artifact"],
+      "requiredArtifactType": "report"
+    }
   }
 }
