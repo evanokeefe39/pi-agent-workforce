@@ -52,8 +52,9 @@ export default function (pi: ExtensionAPI) {
       run_id: Type.Optional(Type.String({ description: "Run ID (auto-set from env if omitted)" })),
       workspace: Type.Optional(Type.String({ description: "Workspace name (auto-set from env if omitted)" })),
     }),
-    async execute(_toolCallId, params, _signal) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
+        const sessionId = ctx?.sessionManager?.getSessionId?.() || "unknown";
         const result = await client.write({
           filename: params.name,
           content: params.content,
@@ -63,8 +64,8 @@ export default function (pi: ExtensionAPI) {
           metadata: {
             ...(params.template ? { template: params.template } : {}),
           },
-          run_id: params.run_id || process.env.RUN_ID || process.env.RUN_ID,
-          workspace: params.workspace || process.env.WORKSPACE || process.env.WORKSPACE,
+          run_id: params.run_id || sessionId,
+          workspace: params.workspace || process.env.WORKSPACE,
         });
         const text = `Artifact written.\nRef: ${result.ref}\nID: ${result.id}\nSize: ${result.size} bytes\nHash: ${result.hash}`;
         return { content: [{ type: "text" as const, text }] };

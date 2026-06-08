@@ -1,6 +1,7 @@
 {
   "packages": [
-    "npm:shitty-extensions",
+    "npm:@tintinweb/pi-tasks",
+    "npm:pi-subagents",
     "npm:pi-otel",
     "npm:pi-permission-system"
   ],

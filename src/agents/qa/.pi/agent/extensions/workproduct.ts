@@ -102,8 +102,8 @@ function listLocal(subdir: string, filters?: { type?: string; session_id?: strin
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getSessionId(): string {
-  return process.env.RUN_ID || process.env.SESSION_ID || "default";
+function getSessionId(ctx?: any): string {
+  return ctx?.sessionManager?.getSessionId?.() || "unknown";
 }
 
 const ASSESSMENT_KINDS = ["artifact_review", "plan_review", "stage_gate"] as const;

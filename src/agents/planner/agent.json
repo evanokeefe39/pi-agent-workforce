@@ -1,0 +1,16 @@
+{
+  "name": "Planner",
+  "role": "orchestrator",
+  "title": "Task Planner & Coordinator",
+  "icon": "brain",
+  "reportsTo": null,
+  "capabilities": "Task decomposition, requirements elicitation, agent delegation, quality assessment",
+  "adapterType": "http",
+  "adapterConfig": {
+    "url": "http://planner:8080/invoke",
+    "timeoutSec": 900
+  },
+  "runtimeConfig": {
+    "heartbeat": { "enabled": false, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 1 }
+  }
+}

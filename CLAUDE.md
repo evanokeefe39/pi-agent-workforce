@@ -1,5 +1,6 @@
 # CLAUDE.md
 Never use powershell
+Never use the Workflow tool (dynamic workflows). Too token-expensive. Use Agent tool or direct research instead.
 
 ## What this is
 
@@ -10,13 +11,18 @@ Evolved from evaluation work in `paperclip-eval` repo (see its EVALUATION.md for
 ## Architecture
 
 ```
-Host Pi (orchestrator + pi-subagents-http extension)
-  ├─ subagent({ agent: "researcher", task: "..." })  → http://localhost:8082
-  ├─ subagent({ agent: "data", task: "..." })         → http://localhost:8083
-  └─ subagent({ agent: "writer", task: "..." })       → http://localhost:8084
+E2E test / user
+  └─ POST http://localhost:8081/invoke  ← planner container (deepseek-reasoner)
+       ├─ subagent("researcher", task) → http://researcher:8080 (qwen3-32b)
+       ├─ subagent("data", task)       → http://data:8080      (qwen3-32b)
+       └─ subagent("writer", task)     → http://writer:8080     (qwen3-32b)
 ```
 
-Delegation is blocking by default — tool call waits until the remote agent completes. No polling loops. Parallel delegation via `tasks: [...]`.
+The planner is the orchestrating agent. It has pi-subagents-http for remote delegation to worker agents over Docker networking. Worker agents have pi-subagents (local, non-HTTP) for internal model routing on subtasks.
+
+Delegation is blocking by default — tool call waits until the remote agent completes. Parallel delegation via `tasks: [...]`. Server supports concurrent sessions (MAX_CONCURRENT_SESSIONS per container).
+
+Session IDs (from Pi SDK's SessionManager) are used for artifact scoping and cross-agent correlation. No process.env mutation for per-request state.
 
 ## Repo layout
 
@@ -32,6 +38,7 @@ src/agents/
   rbac.json                 Artifact access control per agent
   extensions/               Pi extensions (discovered from ~/.pi/agent/extensions/)
     artifacts/              write_artifact, read_artifact, list_artifacts
+    subagent-http/          Vendored pi-subagents-http (planner only)
     deep-research/          Multi-iteration research engine
     duckdb/                 DuckDB analytics
     web-search.ts           Exa semantic search
@@ -39,19 +46,22 @@ src/agents/
     web-scrape/             4-tier scraping (static, stealth, browser, Apify)
     workproduct-lib/        Structured findings with ADMIRALTY grading
     writing-style/          Vale linter + style profiling
+  planner/                  Planner agent — task decomposition, delegation, quality assessment
   researcher/               Research agent — web search, scraping, structured findings
   data/                     Data agent — scraping, ETL, database ops
   writer/                   Writer agent — document pipeline, style engine
   coder/                    Coder agent — code execution, analysis
   qa/                       QA agent — review, verdicts, gating
   publisher/                Publisher agent — content distribution
+tasks/
+  lessons.md                Patterns learned from corrections and successes
+  plans/                    Named implementation plans
 tests/
   e2e/                      End-to-end test suite
-    jsonl-helpers.sh         jq-based JSONL parsing + artifact helpers
-    e2e-20-subagent-http-smoke.sh
-    e2e-21-research-depth.sh
-    e2e-22-output-styles.sh
-    e2e-23-m01-http.sh
+    jsonl-helpers.sh         jq-based JSONL parsing + artifact + planner helpers
+    e2e-30-instagram-growth-research.sh   Full planner pipeline test
+    e2e-31-researcher-tool-trials.sh      Model/prompt comparison trials
+    e2e-32-model-and-output-validation.sh Model + concurrency + output validation
     run-e2e.sh
 ```
 
@@ -118,6 +128,7 @@ Researcher and Data agents produce structured findings via `record_finding`:
 
 | Service | Host Port | Container Port |
 |---------|-----------|----------------|
+| Planner | 8081 | 8080 |
 | Researcher | 8082 | 8080 |
 | Data | 8083 | 8080 |
 | Writer | 8084 | 8080 |
@@ -127,11 +138,33 @@ Researcher and Data agents produce structured findings via `record_finding`:
 | MinIO Console | 9001 | 9001 |
 | OpenObserve | 5080 | 5080 |
 
+## Models
+
+| Role | Model | Provider | Notes |
+|------|-------|----------|-------|
+| Agentic (tool calling) | Qwen3 32B | Cerebras (free) | BFCL #2, primary for all worker agents |
+| Planning | DeepSeek R1 | DeepSeek ($0.55/M) | Strong reasoning, used by planner |
+| Fallback | Llama 3.3 70B | Cerebras (free) | Second fallback for agentic tasks |
+| Smol | Llama 3.1 8B | Groq (free) | Lightweight tasks, commit messages |
+
+MiniMax removed — fundamentally broken for tool calling (XML format, concatenated tool names). deepseek-chat removed from fallback chains — not suited for agentic tool-use, prefer loud failures during development.
+
+## Concurrency
+
+Server supports MAX_CONCURRENT_SESSIONS per container (default 3). Planner: 1, Researcher: 3, Data: 2, Writer: 2. Session IDs from Pi SDK used for artifact scoping — no global mutable state.
+
+## Packages (Pi extensions installed via npm)
+
+All agents: `@tintinweb/pi-tasks` (task tracking), `pi-otel` (observability), `pi-permission-system`
+Worker agents: `pi-subagents` (local subprocess model routing for subtasks)
+Planner only: vendored `pi-subagents-http` (remote HTTP delegation to worker containers)
+
 ## Running tests
 
 ```bash
 bash tests/e2e/run-e2e.sh          # all active tests
-bash tests/e2e/run-e2e.sh 23       # M0.1 milestone only
+bash tests/e2e/e2e-32-model-and-output-validation.sh  # model + concurrency + output validation
+bash tests/e2e/e2e-30-instagram-growth-research.sh     # full planner pipeline
 ```
 
 Tests produce markdown reports in `tests/results/` with metrics tables.

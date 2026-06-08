@@ -120,6 +120,32 @@ services:
         limits:
           memory: 512M
 
+  planner:
+    <<: *agent
+    build:
+      <<: *agent-build
+      target: planner
+    ports:
+      - "8081:8080"
+    env_file:
+      - .env
+      - src/agents/planner/.env
+    environment:
+      AGENT_NAME: "planner"
+      WORKSPACE: "default"
+      ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      BRIDGE_TIMEOUT_MS: "1800000"
+      MAX_CONCURRENT_SESSIONS: "1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
+    depends_on:
+      artifact-service:
+        condition: service_healthy
+      researcher:
+        condition: service_healthy
+      writer:
+        condition: service_healthy
+
   researcher:
     <<: *agent
     build:
@@ -136,6 +162,8 @@ services:
       NVIDIA_NIM_API_KEY: "${NVIDIA_NIM_API_KEY}"
       FINDING_STYLE: "intelligence"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      BRIDGE_TIMEOUT_MS: "600000"
+      MAX_CONCURRENT_SESSIONS: "3"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
       OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
     volumes:
@@ -161,6 +189,8 @@ services:
       NVIDIA_NIM_API_KEY: "${NVIDIA_NIM_API_KEY}"
       FINDING_STYLE: "data"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      BRIDGE_TIMEOUT_MS: "600000"
+      MAX_CONCURRENT_SESSIONS: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
       OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
     deploy:
@@ -187,6 +217,8 @@ services:
       AGENT_NAME: "writer"
       WORKSPACE: "default"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      BRIDGE_TIMEOUT_MS: "600000"
+      MAX_CONCURRENT_SESSIONS: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
       OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
     deploy:

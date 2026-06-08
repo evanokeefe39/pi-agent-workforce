@@ -27,8 +27,8 @@ type DataKind = (typeof DATA_KINDS)[number];
 
 const AGENT_NAME = process.env.AGENT_NAME || "unknown";
 
-function getSessionId(): string {
-  return process.env.RUN_ID || process.env.SESSION_ID || "default";
+function getSessionId(ctx?: any): string {
+  return ctx?.sessionManager?.getSessionId?.() || "unknown";
 }
 
 function asText(text: string, details?: Record<string, unknown>) {

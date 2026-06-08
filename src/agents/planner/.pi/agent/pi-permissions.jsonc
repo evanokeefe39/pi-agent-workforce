@@ -1,0 +1,36 @@
+// Planner Agent Permission Policy
+// Role: orchestration, delegation, quality assessment.
+// Can use subagent tool, read artifacts. Nothing else.
+{
+  "defaultPolicy": {
+    "tools": "deny",
+    "bash": "deny",
+    "mcp": "deny",
+    "skills": "deny",
+    "special": "allow"
+  },
+
+  "tools": {
+    "*": "deny",
+
+    // Subagent delegation
+    "subagent": "allow",
+
+    // Artifact inspection (read-only)
+    "read_artifact": "allow",
+    "list_artifacts": "allow",
+
+    // Task tracking (pi-tasks)
+    "TaskCreate": "allow",
+    "TaskList": "allow",
+    "TaskGet": "allow",
+    "TaskUpdate": "allow",
+
+    // Escalation
+    "escalate": "allow"
+  },
+
+  "bash": {
+    "*": "deny"
+  }
+}

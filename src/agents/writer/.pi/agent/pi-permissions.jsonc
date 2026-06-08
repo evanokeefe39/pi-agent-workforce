@@ -46,6 +46,11 @@
     "duckdb_import": "allow",
 
     // Escalation
+    "TaskCreate": "allow",
+    "TaskList": "allow",
+    "TaskGet": "allow",
+    "TaskUpdate": "allow",
+    "subagent": "allow",
     "escalate": "allow",
 
 

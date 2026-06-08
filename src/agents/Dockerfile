@@ -18,6 +18,32 @@ COPY extensions/web-search.ts /root/.pi/agent/extensions/web-search.ts
 COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
 RUN pi extensions install || true
+ENV WORKSPACE_DIR=/workspace
+RUN mkdir -p /workspace
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+CMD ["node", "server.mjs"]
+
+# ============================================================
+# PLANNER — orchestration only (subagent-http + artifact read)
+# Builds from node directly, NOT from base, to avoid inheriting
+# research/scraping tools. Planner must delegate, never do work itself.
+# ============================================================
+FROM node:22-slim AS planner
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN npm install -g --ignore-scripts @earendil-works/pi-coding-agent
+ENV NODE_PATH=/usr/local/lib/node_modules
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev
+COPY server.mjs logger.mjs ./
+COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
+COPY extensions/subagent-http/ /root/.pi/agent/extensions/subagent-http/
+RUN cd /root/.pi/agent/extensions/subagent-http && npm install --omit=dev 2>/dev/null || true
+COPY planner/.pi/agent/ /root/.pi/agent/
+COPY planner/agent.json /app/planner/agent.json
+RUN pi extensions install || true
 RUN mkdir -p /workspace
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \

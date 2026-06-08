@@ -1,0 +1,19 @@
+{
+  "packages": [
+    "npm:@tintinweb/pi-tasks",
+    "npm:pi-otel"
+  ],
+  "terminal": {
+    "showTerminalProgress": false
+  },
+  "steeringMode": "all",
+  "followUpMode": "none",
+  "quietStartup": true,
+  "theme": "dark",
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-reasoner",
+  "defaultThinkingLevel": "high",
+  "compaction": {
+    "enabled": true
+  }
+}

@@ -212,8 +212,8 @@ function getPromptSnippet(): string {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getSessionId(): string {
-  return process.env.RUN_ID || process.env.SESSION_ID || "default";
+function getSessionId(ctx?: any): string {
+  return ctx?.sessionManager?.getSessionId?.() || "unknown";
 }
 
 function recordToFinding(rec: LocalRecord, content: string): StoredFinding {
@@ -285,7 +285,7 @@ export default function (pi: ExtensionAPI) {
       related_findings: Type.Optional(Type.Array(Type.String())),
       contradicts: Type.Optional(Type.Array(Type.String())),
     }),
-    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal, _onUpdate?: any, ctx?: any) {
       try {
         const style = params.style as string;
         const sources: SourceInput[] = params.sources;
@@ -313,7 +313,7 @@ export default function (pi: ExtensionAPI) {
 
         const corroboration = inferCorroboration(sources, params.corroboration);
         const grade = admiraltyGrade(sources, primaryIdx);
-        const sessionId = getSessionId();
+        const sessionId = getSessionId(ctx);
 
         const result = writeLocal("finding", JSON.stringify(params.claim), {
           style,

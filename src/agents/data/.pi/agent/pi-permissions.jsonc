@@ -53,6 +53,11 @@
     "get_data_product": "allow",
 
     // Escalation
+    "TaskCreate": "allow",
+    "TaskList": "allow",
+    "TaskGet": "allow",
+    "TaskUpdate": "allow",
+    "subagent": "allow",
     "escalate": "allow",
 
 

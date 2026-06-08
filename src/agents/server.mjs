@@ -97,15 +97,21 @@ function trackRun(runId, data) {
   }
 }
 
-// --- FIFO queue (Pi sessions are sequential — one prompt at a time) ---
+// --- Concurrency limiter ---
 
-const queue = [];
-let processing = false;
+const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_SESSIONS, 10) || 3;
+let activeCount = 0;
+const waitQueue = [];
 
-function drainQueue() {
-  if (processing || queue.length === 0) return;
-  const next = queue.shift();
-  next();
+async function acquireSlot() {
+  if (activeCount < MAX_CONCURRENT) { activeCount++; return; }
+  await new Promise(resolve => waitQueue.push(resolve));
+  activeCount++;
+}
+
+function releaseSlot() {
+  activeCount--;
+  if (waitQueue.length > 0) waitQueue.shift()();
 }
 
 // --- Shared services (initialized once at boot) ---
@@ -166,10 +172,6 @@ async function processInvocation(body, traceId, requestStart) {
   const workDir = body.workspace || `/workspace/${issueScope}`;
   try { mkdirSync(workDir, { recursive: true }); } catch { /* non-fatal */ }
 
-  // Inject run context for extensions (artifact service, workproducts)
-  const effectiveRunId = body.correlationId || traceId;
-  process.env.RUN_ID = effectiveRunId;
-
   // Fresh session per request — no session bleed
   let session;
   try {
@@ -179,15 +181,16 @@ async function processInvocation(body, traceId, requestStart) {
     });
     session = result.session;
   } catch (err) {
-    delete process.env.RUN_ID;
     metrics.requests_active--;
     metrics.requests_failed++;
     log("error", "session_create_failed", { error: err.message, trace_id: traceId });
     trackRun(traceId, { status: "failed", completedAt: new Date().toISOString(), error: err.message });
-    processing = false;
-    drainQueue();
+    releaseSlot();
     return;
   }
+
+  const sessionId = session.sessionId;
+  log("info", "session_created", { session_id: sessionId, trace_id: traceId, correlation_id: body.correlationId || null });
 
   // Collect events
   const events = [];
@@ -230,7 +233,6 @@ async function processInvocation(body, traceId, requestStart) {
       }),
     ]);
   } catch (err) {
-    delete process.env.RUN_ID;
     activeAborts.delete(traceId);
     metrics.requests_active--;
     metrics.requests_failed++;
@@ -242,13 +244,11 @@ async function processInvocation(body, traceId, requestStart) {
       completedAt: new Date().toISOString(),
       error: err.message,
     });
-    processing = false;
-    drainQueue();
+    releaseSlot();
     return;
   }
 
   // Harvest results
-  delete process.env.RUN_ID;
   activeAborts.delete(traceId);
   const totalDuration = Date.now() - requestStart;
   metrics.durations.push(totalDuration);
@@ -274,10 +274,9 @@ async function processInvocation(body, traceId, requestStart) {
 
   reportCostEvent(usage).catch(() => {});
 
-  trackRun(traceId, { status: "completed", completedAt: new Date().toISOString(), output, usage });
+  trackRun(traceId, { status: "completed", completedAt: new Date().toISOString(), output, usage, sessionId });
 
-  processing = false;
-  drainQueue();
+  releaseSlot();
 }
 
 // --- HTTP server ---
@@ -290,8 +289,8 @@ const server = http.createServer(async (req, res) => {
       uptime_s: Math.floor((Date.now() - bootTime) / 1000),
       version: VERSION,
       config: { provider: PI_PROVIDER, model: PI_MODEL, port: Number(PORT) },
-      busy: processing,
-      queue_depth: queue.length,
+      busy: activeCount >= MAX_CONCURRENT,
+      queue_depth: waitQueue.length,
       queue_max: QUEUE_MAX_DEPTH,
       runs_active: [...runs.values()].filter(r => r.status === "queued" || r.status === "running").length,
     }));
@@ -310,14 +309,14 @@ const server = http.createServer(async (req, res) => {
       avg_duration_ms: avgDuration,
       last_request_at: metrics.last_request_at,
       cold_start_ms: metrics.cold_start_ms,
-      queue_depth: queue.length,
+      queue_depth: waitQueue.length,
       runs_completed: [...runs.values()].filter(r => r.status === "completed").length,
       runs_active: [...runs.values()].filter(r => r.status === "queued" || r.status === "running").length,
     }));
   }
 
   if (req.method === "GET" && req.url === "/describe") {
-    const busy = processing && queue.length >= QUEUE_MAX_DEPTH;
+    const busy = activeCount >= MAX_CONCURRENT && waitQueue.length >= QUEUE_MAX_DEPTH;
     let tools = [];
     let extensions = [];
     if (services) {
@@ -405,8 +404,6 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify({ error: "already_finished", state: run.status }));
     }
     if (run.status === "queued") {
-      const idx = queue.findIndex(fn => fn._runId === runId);
-      if (idx >= 0) queue.splice(idx, 1);
       metrics.requests_active--;
     }
     const abort = activeAborts.get(runId);
@@ -465,12 +462,12 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ error: "invalid_json", detail: err.message }));
   }
 
-  // Check queue capacity before accepting
-  if (processing && queue.length >= QUEUE_MAX_DEPTH) {
+  // Check capacity before accepting
+  if (activeCount >= MAX_CONCURRENT && waitQueue.length >= QUEUE_MAX_DEPTH) {
     metrics.requests_active--;
     metrics.requests_failed++;
     res.writeHead(429, { "Content-Type": "application/json" });
-    return res.end(JSON.stringify({ error: "queue_full", detail: `${queue.length}/${QUEUE_MAX_DEPTH}` }));
+    return res.end(JSON.stringify({ error: "queue_full", detail: `${waitQueue.length}/${QUEUE_MAX_DEPTH}` }));
   }
 
   const correlationId = body.correlationId || traceId;
@@ -495,19 +492,10 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(202, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ runId: traceId, status: "accepted" }));
 
-  if (processing) {
-    log("info", "request_queued", { depth: queue.length + 1, trace_id: traceId });
-    const queuedFn = () => {
-      processing = true;
-      processInvocation(body, traceId, requestStart);
-    };
-    queuedFn._runId = traceId;
-    queue.push(queuedFn);
-    return;
-  }
-
-  processing = true;
-  processInvocation(body, traceId, requestStart);
+  // Acquire a concurrency slot (may wait if all slots busy)
+  acquireSlot().then(() => {
+    processInvocation(body, traceId, requestStart);
+  });
 });
 
 // --- Startup ---
@@ -523,10 +511,6 @@ server.listen(PORT, async () => {
     }
 
     const extCount = services.resourceLoader.getExtensions().extensions.length;
-    if (extCount < 3) {
-      log("error", "insufficient_extensions", { count: extCount, minimum: 3, detail: "Expected artifacts + agent-specific extensions" });
-      process.exit(1);
-    }
 
     log("info", "ready", { startup_ms: Date.now() - bootTime, agent_name: AGENT_NAME, extensions: extCount });
   } catch (err) {
@@ -539,7 +523,7 @@ server.listen(PORT, async () => {
 
 function shutdown(reason) {
   log("info", "shutdown", { reason });
-  for (const _ of queue.splice(0)) { /* drain — HTTP connections will timeout */ }
+  for (const resolve of waitQueue.splice(0)) { resolve(); }
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(1), 5000);
 }

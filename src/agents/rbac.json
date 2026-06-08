@@ -1,5 +1,9 @@
 {
   "agents": {
+    "planner": {
+      "read": ["**"],
+      "write": ["*/*/planner/**"]
+    },
     "ceo": {
       "read": ["**"],
       "write": ["*/*/ceo/**"]

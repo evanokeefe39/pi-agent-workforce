@@ -6,6 +6,7 @@
 set -euo pipefail
 
 # --- Config ---
+PLANNER_URL="${PLANNER_URL:-http://localhost:8081}"
 RESEARCHER_URL="${RESEARCHER_URL:-http://localhost:8082}"
 DATA_URL="${DATA_URL:-http://localhost:8083}"
 WRITER_URL="${WRITER_URL:-http://localhost:8084}"
@@ -74,6 +75,55 @@ pi_run() {
     2> "$stderr_file" || true
 
   echo "$events_file"
+}
+
+# --- Planner invocation (HTTP) ---
+
+# Invoke the planner agent via HTTP and poll until completion.
+# Returns path to result JSON file.
+# Usage: RESULT=$(planner_run "goal text" [timeout_seconds] [tag])
+planner_run() {
+  local prompt="$1"
+  local timeout="${2:-900}"
+  local tag="${3:-planner}"
+  local result_file="$RESULTS_DIR/${TEST_ID:-test}-${tag}.json"
+
+  # POST /invoke
+  local invoke_resp
+  invoke_resp=$(curl -sf -X POST "$PLANNER_URL/invoke" \
+    -H "Content-Type: application/json" \
+    -d "$(jq -n --arg t "$prompt" '{task: $t}')" 2>/dev/null)
+
+  local run_id
+  run_id=$(echo "$invoke_resp" | jq -r '.runId // empty')
+
+  if [ -z "$run_id" ]; then
+    echo '{"error":"invoke_failed","output":""}' > "$result_file"
+    echo "$result_file"
+    return
+  fi
+
+  # Poll /status until done or timeout
+  local elapsed=0
+  local poll_interval=5
+  while [ "$elapsed" -lt "$timeout" ]; do
+    sleep "$poll_interval"
+    elapsed=$((elapsed + poll_interval))
+
+    local state
+    state=$(curl -sf "$PLANNER_URL/status/$run_id" 2>/dev/null | jq -r '.state // "unknown"')
+
+    if [ "$state" != "running" ] && [ "$state" != "queued" ]; then break; fi
+
+    # Adaptive backoff
+    if [ "$elapsed" -gt 120 ]; then poll_interval=10; fi
+    if [ "$elapsed" -gt 300 ]; then poll_interval=20; fi
+  done
+
+  # Fetch result
+  curl -sf "$PLANNER_URL/result/$run_id" > "$result_file" 2>/dev/null || \
+    echo '{"error":"result_fetch_failed","output":""}' > "$result_file"
+  echo "$result_file"
 }
 
 # --- JSONL parsing (all use jq -s for reliability) ---
@@ -194,11 +244,18 @@ require_agents() {
   echo "Checking agent health..."
   local agents=("$RESEARCHER_URL" "$DATA_URL" "$WRITER_URL")
   local names=("researcher" "data" "writer")
+  local max_wait=90
   for i in "${!agents[@]}"; do
-    local status
-    status=$(curl -sf "${agents[$i]}/health" 2>/dev/null | jq -r '.status // "unreachable"')
+    local elapsed=0
+    local status="unknown"
+    while [ "$elapsed" -lt "$max_wait" ]; do
+      status=$(curl -sf "${agents[$i]}/health" 2>/dev/null | jq -r '.status // "unreachable"')
+      if [ "$status" = "ok" ]; then break; fi
+      sleep 3
+      elapsed=$((elapsed + 3))
+    done
     if [ "$status" != "ok" ]; then
-      echo "[FATAL] ${names[$i]} not healthy at ${agents[$i]} (status=$status)"
+      echo "[FATAL] ${names[$i]} not healthy at ${agents[$i]} after ${max_wait}s (status=$status)"
       exit 1
     fi
   done

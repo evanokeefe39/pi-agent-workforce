@@ -1,0 +1,49 @@
+modelRoles:
+  smol:    groq/llama-3.1-8b-instant
+  default: deepseek/deepseek-reasoner
+  agentic: deepseek/deepseek-reasoner
+  plan:    deepseek/deepseek-reasoner
+  review:  deepseek/deepseek-reasoner
+  commit:  groq/llama-3.1-8b-instant
+
+retry:
+  enabled: true
+  maxRetries: 5
+  fallbackChains:
+    default:
+      - deepseek/deepseek-reasoner
+      - cerebras/qwen-3-32b
+      - openrouter/deepseek/deepseek-r1:free
+    agentic:
+      - deepseek/deepseek-reasoner
+      - cerebras/qwen-3-32b
+      - cerebras/llama-3.3-70b
+    plan:
+      - deepseek/deepseek-reasoner
+      - cerebras/qwen-3-32b
+      - openrouter/deepseek/deepseek-r1:free
+    review:
+      - deepseek/deepseek-reasoner
+      - cerebras/qwen-3-32b
+    smol:
+      - groq/llama-3.1-8b-instant
+      - cerebras/llama3.1-8b
+    commit:
+      - groq/llama-3.1-8b-instant
+      - cerebras/llama3.1-8b
+  fallbackRevertPolicy: cooldown-expiry
+
+contextPromotion:
+  enabled: true
+
+compaction:
+  enabled: true
+  strategy: context-full
+  autoContinue: true
+
+cycleOrder:
+  - default
+  - plan
+
+skills:
+  enabled: false

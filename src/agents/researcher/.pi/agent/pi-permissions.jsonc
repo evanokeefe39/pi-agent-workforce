@@ -48,6 +48,15 @@
     "query_findings": "allow",
     "get_finding": "allow",
 
+    // Task tracking (pi-tasks)
+    "TaskCreate": "allow",
+    "TaskList": "allow",
+    "TaskGet": "allow",
+    "TaskUpdate": "allow",
+
+    // Local subagents (pi-subagents — for model routing on subtasks)
+    "subagent": "allow",
+
     // Escalation
     "escalate": "allow",
 
