@@ -71,6 +71,93 @@ Changes applied:
 
 ---
 
+## OPEN: Model identity has no single source of truth
+
+**Status:** Open
+**Severity:** High — causes silent wrong-model execution and misleading diagnostics
+
+**Problem:** The model an agent runs on is configured in 4 independent places, none authoritative:
+
+| Source | What it controls | Example value |
+|--------|-----------------|---------------|
+| `settings.json` defaultProvider/defaultModel | Pi CLI runtime model selection | `cerebras` / `qwen-3-32b` |
+| `config.yml` modelRoles.default | Role-based model routing (only when a role is requested) | `cerebras/qwen-3-32b` |
+| `server.mjs` PI_PROVIDER/PI_MODEL env vars | /describe, /health, /result model field (reporting only) | defaults to `minimax/MiniMax-M2.7` |
+| `docker-compose.yml` environment | Can override PI_PROVIDER/PI_MODEL per service | not set for workers |
+
+**Consequences observed:**
+1. Writer ran on deepseek-chat (settings.json) while config.yml said qwen-3-32b and /describe reported minimax
+2. E2E-32 model validation test checks /describe, which reports server.mjs defaults, not the actual model Pi CLI uses
+3. After fixing settings.json, /describe still showed minimax because server.mjs has its own hardcoded defaults
+4. Planner needs different model than workers but server.mjs has one global default
+
+**Root cause:** Model identity evolved incrementally — server.mjs predates config.yml, settings.json was added separately, docker-compose env vars are a third layer. No single file was designated as source of truth.
+
+**Desired state:** One place defines the model per agent. Everything else reads from it.
+
+**Options to evaluate:**
+1. **docker-compose.yml as source of truth** — PI_PROVIDER/PI_MODEL env vars per service. server.mjs reads from env (already does). settings.json and config.yml read from env at container startup (needs init script)
+2. **settings.json as source of truth** — server.mjs reads settings.json at startup instead of env vars. config.yml modelRoles.default stays aligned manually
+3. **config.yml as source of truth** — server.mjs parses config.yml for the default model. settings.json generated from config.yml
+
+**Interim fix applied:** Updated server.mjs defaults from minimax to cerebras/qwen-3-32b, added PI_PROVIDER/PI_MODEL to planner in docker-compose.yml. All settings.json files aligned. This is duct tape — the 4-source problem remains.
+
+---
+
+## OPEN: Cerebras removed Qwen3 32B and Llama 3.3 70B from API
+
+**Status:** Open — blocks all agent execution
+**Severity:** Critical
+
+**Discovery:** After aligning all agents to `cerebras/qwen-3-32b`, every request returns 0 tokens in ~400ms. Direct API test confirms: `{"message":"Model qwen-3-32b does not exist or you do not have access to it.","type":"not_found_error"}`.
+
+**Current Cerebras models:** Only `gpt-oss-120b` and `zai-glm-4.7` available. Qwen3 32B, Llama 3.3 70B, and Llama 3.1 8B all removed.
+
+**Impact:** Primary model (qwen-3-32b) and first fallback (llama-3.3-70b) both gone. All worker agents produce empty responses. The smol chain (groq/llama-3.1-8b) and plan chain (deepseek/deepseek-reasoner) are unaffected since they use different providers.
+
+**Pi SDK behavior:** Pi SDK silently returns empty response when model not found instead of throwing an error. The `|| true` fallback-chain behavior in config.yml should catch this, but the server shows 0 tokens and completes — suggesting Pi SDK treats the API error as a successful empty completion rather than triggering fallback.
+
+**Additional finding:** Groq free tier has 6K TPM limit for Qwen3 32B, 12K for Llama 3.3 70B. Fully-loaded agent system prompts are ~15K tokens (AGENTS.md + all extensions). Pi SDK silently returns 0 tokens on 413 errors instead of falling back. The model works fine via Pi CLI without extensions (~2K tokens) or from a clean dir.
+
+**Next steps:**
+1. Fix models.json apiKey format: use `$GROQ_API_KEY` not `GROQ_API_KEY` (Pi auto-migrates but warns)
+2. Evaluate providers with no/high TPM limits for free tier: DeepSeek (deepseek-chat works, proven in E2E-33 first run), OpenRouter free models
+3. Fix Pi SDK silent failure — 413 errors should trigger fallback chain, not return empty
+4. Consider reducing extension token footprint (lazy-load tool descriptions, trim promptSnippets)
+5. Update all config.yml fallback chains once new primary model chosen
+
+---
+
+## OPEN: Agents need hardening against model/provider failures
+
+**Status:** Open
+**Severity:** High
+
+**Problem:** When a model provider removes models or goes down, agents silently return empty responses. No error, no fallback, no alert. The Pi SDK treats a 0-token completion as success. The test suite also doesn't catch this — E2E-32 checks the /describe model string but never verifies the agent actually generated content.
+
+**Failure modes observed:**
+1. Provider removes model (Cerebras dropped Qwen3 32B) → Pi SDK returns empty completion → server reports "completed" with 0 output → tests that check for completion pass
+2. API key expires → same silent empty response
+3. Rate limiting → unknown behavior, may also silently degrade
+
+**Hardening needed in server.mjs:**
+- Detect 0-token completions and treat as failure, not success
+- Log a clear error when output tokens = 0 after a non-trivial prompt
+- Trigger fallback chain on empty completions (if Pi SDK supports it)
+- Report actual model used in result (from API response), not configured model
+
+**Hardening needed in tests:**
+- E2E-32 model validation: send a task and verify output > 0 tokens, not just completion state
+- All E2E tests: check output length as a baseline assertion (e.g. output > 100 chars)
+- Add a "model smoke test" that sends "say hello" and verifies non-empty response before running full test suite
+- Test fallback chain behavior: mock primary model failure, verify agent falls back
+
+**Hardening needed in monitoring:**
+- Alert on agents completing with 0 output tokens (OpenObserve/OTLP)
+- Track model identity per request in metrics (provider + model from API response, not config)
+
+---
+
 ## OPEN: Writing-style extension tools not usable by writer agent
 
 **Status:** Investigating

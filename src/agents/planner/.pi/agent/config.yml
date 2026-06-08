@@ -12,25 +12,23 @@ retry:
   fallbackChains:
     default:
       - deepseek/deepseek-reasoner
-      - cerebras/qwen-3-32b
+      - groq/qwen/qwen3-32b
       - openrouter/deepseek/deepseek-r1:free
     agentic:
       - deepseek/deepseek-reasoner
-      - cerebras/qwen-3-32b
-      - cerebras/llama-3.3-70b
+      - groq/qwen/qwen3-32b
+      - groq/llama-3.3-70b-versatile
     plan:
       - deepseek/deepseek-reasoner
-      - cerebras/qwen-3-32b
+      - groq/qwen/qwen3-32b
       - openrouter/deepseek/deepseek-r1:free
     review:
       - deepseek/deepseek-reasoner
-      - cerebras/qwen-3-32b
+      - groq/qwen/qwen3-32b
     smol:
       - groq/llama-3.1-8b-instant
-      - cerebras/llama3.1-8b
     commit:
       - groq/llama-3.1-8b-instant
-      - cerebras/llama3.1-8b
   fallbackRevertPolicy: cooldown-expiry
 
 contextPromotion:

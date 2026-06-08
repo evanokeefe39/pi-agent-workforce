@@ -142,12 +142,12 @@ Researcher and Data agents produce structured findings via `record_finding`:
 
 | Role | Model | Provider | Notes |
 |------|-------|----------|-------|
-| Agentic (tool calling) | Qwen3 32B | Cerebras (free) | BFCL #2, primary for all worker agents |
+| Agentic (tool calling) | Qwen3 32B | Groq (free) | BFCL #2, primary for all worker agents |
 | Planning | DeepSeek R1 | DeepSeek ($0.55/M) | Strong reasoning, used by planner |
-| Fallback | Llama 3.3 70B | Cerebras (free) | Second fallback for agentic tasks |
+| Fallback | Llama 3.3 70B | Groq (free) | Second fallback for agentic tasks |
 | Smol | Llama 3.1 8B | Groq (free) | Lightweight tasks, commit messages |
 
-MiniMax removed — fundamentally broken for tool calling (XML format, concatenated tool names). deepseek-chat removed from fallback chains — not suited for agentic tool-use, prefer loud failures during development.
+MiniMax removed — fundamentally broken for tool calling (XML format, concatenated tool names). Cerebras removed — dropped Qwen3/Llama models from API (2026-06-08). deepseek-chat removed from fallback chains — not suited for agentic tool-use, prefer loud failures during development.
 
 ## Concurrency
 

@@ -12,8 +12,8 @@
   "followUpMode": "all",
   "quietStartup": true,
   "theme": "dark",
-  "defaultProvider": "cerebras",
-  "defaultModel": "qwen-3-32b",
+  "defaultProvider": "groq",
+  "defaultModel": "qwen/qwen3-32b",
   "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": false

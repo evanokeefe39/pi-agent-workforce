@@ -1,7 +1,7 @@
 modelRoles:
   smol:    groq/llama-3.1-8b-instant
-  default: cerebras/qwen-3-32b
-  agentic: cerebras/qwen-3-32b
+  default: groq/qwen/qwen3-32b
+  agentic: groq/qwen/qwen3-32b
   plan:    deepseek/deepseek-reasoner
   review:  deepseek/deepseek-reasoner
   commit:  groq/llama-3.1-8b-instant
@@ -12,27 +12,25 @@ retry:
   fallbackChains:
     smol:
       - groq/llama-3.1-8b-instant
-      - cerebras/llama3.1-8b
       - nvidia/meta/llama-3.1-8b-instruct
     default:
-      - cerebras/qwen-3-32b
-      - cerebras/llama-3.3-70b
+      - groq/qwen/qwen3-32b
+      - groq/llama-3.3-70b-versatile
       - openrouter/meta-llama/llama-4-maverick:free
     agentic:
-      - cerebras/qwen-3-32b
-      - cerebras/llama-3.3-70b
+      - groq/qwen/qwen3-32b
+      - groq/llama-3.3-70b-versatile
       - nvidia/meta/llama-4-maverick-17b-128e-instruct
     plan:
       - deepseek/deepseek-reasoner
-      - cerebras/qwen-3-32b
+      - groq/qwen/qwen3-32b
       - openrouter/deepseek/deepseek-r1:free
     review:
       - deepseek/deepseek-reasoner
-      - cerebras/qwen-3-32b
+      - groq/qwen/qwen3-32b
       - openrouter/deepseek/deepseek-r1:free
     commit:
       - groq/llama-3.1-8b-instant
-      - cerebras/llama3.1-8b
   fallbackRevertPolicy: cooldown-expiry
 
 contextPromotion:
