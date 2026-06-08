@@ -4,7 +4,7 @@
   "title": "Data Analyst",
   "icon": "database",
   "reportsTo": "CEO",
-  "capabilities": "Database operations, SQL queries, data management, web scraping, organizational data curation",
+  "capabilities": "Code-first data analysis via DuckDB SQL and Python. Receives raw data artifacts from researcher, computes statistical summaries, metrics, trend analysis, and structured datasets.",
   "adapterType": "http",
   "adapterConfig": {
     "url": "http://data:8080/invoke",
@@ -14,7 +14,7 @@
     "heartbeat": { "enabled": false, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 },
     "validation": {
       "maxTurns": 60,
-      "requiredTools": ["write_artifact"],
+      "requiredTools": ["write_artifact", "record_query_result"],
       "requiredArtifactType": "dataset"
     }
   }

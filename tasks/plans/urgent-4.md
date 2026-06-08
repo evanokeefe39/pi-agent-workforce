@@ -111,8 +111,9 @@
   - [x] 1c. Writer post-run validation — checks artifact service for report artifact
   - [x] 1d. Turn count circuit breaker — aborts via AbortController at maxTurns
   - [ ] 1e. Planner delegation validation — prompt-level, deferred
-- [ ] 2. Data agent implementation
-  - [ ] 2a. Role definition
-  - [ ] 2b. AGENTS.md
-  - [ ] 2c. Test with sample data
+- [x] 2. Data agent implementation
+  - [x] 2a. Role definition — code-first analyst, not scraper. agent.json updated.
+  - [x] 2b. AGENTS.md — rewritten with 4-phase planning, few-shot example, code-first enforcement
+  - [x] 2b+. Skill (data-analysis), subagent (chart-spec-writer), Dockerfile updated
+  - [ ] 2c. Test with sample data — E2E-34 written, pending Docker rebuild + run
 - [ ] 3. M0.5 execution

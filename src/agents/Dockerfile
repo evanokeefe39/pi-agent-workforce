@@ -98,6 +98,7 @@ RUN pip3 install --break-system-packages duckdb
 
 FROM data-deps AS data
 COPY data/.pi/agent/ /root/.pi/agent/
+COPY data/.pi/agents/ /root/.pi/agents/
 COPY data/agent.json /app/data/agent.json
 COPY data/scripts/ /app/scripts/
 RUN touch /app/.browsers-installed
