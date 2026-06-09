@@ -74,7 +74,8 @@ services:
 
   artifact-service:
     build:
-      context: src/artifact-service
+      context: src
+      dockerfile: artifact-service/Dockerfile
     restart: unless-stopped
     ports:
       - "8090:8090"

@@ -138,6 +138,38 @@
 
 ---
 
+## OPEN: Session isolation and artifact replication architecture
+
+**Status:** Open — architectural change
+**Severity:** High
+
+**Problem:** All concurrent sessions share `/workspace/scratch`. server.ts computes a per-invocation `workDir` (line 217) but never passes it to the Pi session or extensions. Workproduct extensions use `process.cwd()` directly, so concurrent sessions write to the same directory. This is a session scoping bug confirmed by industry research — LangGraph has a documented cross-thread contamination bug (langchain-ai/langgraphjs#2040) from the same pattern.
+
+**Design decisions (agreed):**
+
+1. **Session-scoped directories.** Each invocation gets `/workspace/sessions/{session_id}/` as its working directory. All tools write within it. Convention: `workproduct/{type}/{ulid}_{name}.{ext}` for outputs, `scratch/` for temp files.
+
+2. **Metadata at write time, not publish time.** Workproduct tools write a `.meta.json` sidecar alongside each file when it's created locally. Contains artifact type, agent name, session ID, lineage inputs, provenance chain. No delayed "publish" step.
+
+3. **Triggered replication to object storage.** A sync layer replicates session directories to MinIO, excluding `scratch/`. Replication is event-triggered (inotify/fswatch), not polling. Files appear in S3 as they're written.
+
+4. **Agent-complete gate.** On session completion, a hook checks whether any file replication is still outstanding. If pending, waits with timeout. If timeout expires, marks run as failed with error or suggests planner wait and retry.
+
+5. **Artifact service role changes.** Becomes a read/query/index layer over what's in S3, not a write endpoint. Still needed for: user uploads (files attached to prompts), cross-agent discovery (query by type/agent/run_id/tags), lineage graph queries.
+
+6. **Provenance manifest.** Each session has `provenance.jsonl` at session root. Workproduct tools append lineage entries as they run. Replicated to S3 like any other file. Artifact service indexes it for lineage graph queries.
+
+**Affected components:**
+- `src/agents/server.ts` — pass session-scoped workDir to session creation
+- `src/agents/extensions/*/workproduct.ts` — write to session dir, write .meta.json sidecars, append to provenance.jsonl
+- `src/agents/extensions/artifacts/index.ts` — write_artifact becomes local-fs write + metadata, not HTTP POST
+- `src/artifact-service/` — new sync/replication layer, shift to read/query role
+- All agent containers — volume mount strategy for sessions
+
+**Industry precedent:** AWS Bedrock AgentCore managed session storage, Azure Foundry hosted agent persistent $HOME, Kubernetes Agent Sandbox PVC-per-session pattern.
+
+---
+
 <details>
 <summary>Resolved Issues</summary>
 
