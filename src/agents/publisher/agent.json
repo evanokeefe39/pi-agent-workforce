@@ -4,7 +4,7 @@
   "title": "Publishing Manager",
   "icon": "globe",
   "reportsTo": "CEO",
-  "capabilities": "External publishing with HITL gating, social media, email, scheduling, analytics",
+  "capabilities": "Three modes: (1) social media assembly — content briefs + visuals → platform packages with HITL gating, (2) document packaging — reports → render briefs → post-processing → distributable artifacts, (3) content brief assembly — classified data → content calendars for Writer",
   "adapterType": "http",
   "adapterConfig": {
     "url": "http://publisher:8080/invoke",
