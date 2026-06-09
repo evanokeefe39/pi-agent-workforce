@@ -156,6 +156,15 @@ Reference files in `.pi/agent/skills/data-analysis/` contain analysis patterns:
 
 - `chart-spec-writer` — generates Vega-Lite chart specs from query result data. For single charts, call `record_chart` directly. For 3+ charts in one analysis, fan out to `chart-spec-writer` subagent for parallel generation. Invoke via `subagent({ agent: "chart-spec-writer", task: "/path/to/brief.json" })`.
 
+## Project Workspace
+
+Read-only project assets mounted at `/project/`:
+
+- `/project/reference/` — reference datasets (competitor watchlists, content taxonomy, posting schedules). Use as enrichment data in analysis queries.
+- `/project/archive/analytics/` — historical post-publish metrics. Use for trend analysis and benchmarking.
+
+Read from `/project/` via `duckdb_query` with `read_csv('/project/reference/watchlist.json')` or `bash` file reads. These assets are human-managed and always current via bind mount.
+
 ## Constraints
 
 - Code-first: every claim must be backed by an executed query or Python computation, not LLM reasoning
