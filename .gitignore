@@ -35,3 +35,8 @@ tests/results/
 
 # Claude Code worktrees
 .claude/worktrees/
+
+# Project workspace — large binaries (use git-lfs if needed)
+project/**/*.psd
+project/**/*.ai
+project/**/*.sketch
