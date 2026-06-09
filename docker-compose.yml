@@ -12,6 +12,9 @@ x-agent: &agent
       limits:
         memory: 512M
 
+x-project-volume: &project-volume
+  ./project:/project:ro
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -200,6 +203,7 @@ services:
           memory: 2G
     volumes:
       - data-workspace:/workspace
+      - ./project:/project:ro
     depends_on:
       artifact-service:
         condition: service_healthy

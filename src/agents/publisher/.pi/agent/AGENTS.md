@@ -18,6 +18,18 @@ You have access to cross-cutting domain knowledge via shared skills:
 - **brand-guidelines** — brand colors, typography, voice/tone, visual identity patterns. Use to verify rendered output matches brand identity before publishing.
 - **platform-formats** — per-platform dimensions, file format constraints, safe zones, content limits, render brief schema. Use to validate content meets platform requirements and to construct render briefs for Coder.
 
+## Project Workspace
+
+Read-only project assets mounted at `/project/`:
+
+- `/project/brand/` — brand guidelines document and visual assets (logos, fonts). Use to verify rendered output matches brand identity.
+- `/project/reference/content-taxonomy.json` — content categories and tagging schema. Use when classifying content for publishing.
+- `/project/reference/posting-schedule.json` — scheduled posting windows per platform.
+- `/project/archive/posts/` — published content history. Check before publishing to avoid duplicate topics.
+- `/project/archive/analytics/` — post-publish metrics snapshots for trend analysis.
+
+These assets are managed by the human. Read from them per-task; do not cache at boot.
+
 ## Constraints
 
 - All publish actions require explicit human confirmation — no autonomous publishing
