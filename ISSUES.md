@@ -373,4 +373,27 @@ Why 5: The retry logic assumes the error message is the ONLY assistant message a
 **Status:** Resolved 2026-06-08
 **Fix:** Updated `.env` ZO_OTLP_AUTH to match docker-compose OpenObserve password.
 
+---
+
+## RESOLVED: OTel traces not reaching OpenObserve — pi-otel silent init failure
+
+**Status:** Resolved 2026-06-10
+**Severity:** High — zero observability despite pi-otel configured on all agents
+
+**Problem:** pi-otel was configured in every agent's settings.json and npm-installed in Docker containers, but zero traces appeared in OpenObserve. Two independent root causes:
+
+1. **`bindExtensions` never called.** server.ts called `createAgentSession` but not `session.bindExtensions({})`. Pi SDK extension lifecycle hooks (`session_start`) only fire after `bindExtensions`. Without it, pi-otel's OTel SDK never initialized — no spans created, no exports attempted. Completely silent failure.
+
+2. **pi-otel `pickByProtocol` HTTP path bug.** When using HTTP protocol, pi-otel passes `url: cfg.endpoint` to OTel HTTP exporters without appending signal-specific paths (`/v1/traces`, `/v1/metrics`, `/v1/logs`). Requests hit the base URL and get 404/dropped. gRPC protocol is unaffected (uses service definitions, no URL paths).
+
+**Fix:**
+- Added `sessionStartEvent: { type: "session_start", reason: "new" }` to `createAgentSession` config
+- Added `await session.bindExtensions({})` after session creation in server.ts
+- Switched all agents from HTTP to gRPC protocol (`"protocol": "grpc"`) in settings.json
+- Added OTel Collector between agents and OpenObserve (otel-collector-config.yaml, docker-compose service)
+- Agents send gRPC to collector:4317, collector exports HTTP to OpenObserve (with correct paths)
+- Artifact-service (custom logger.mjs) uses HTTP to collector:4318
+
+**Verified:** `pi.interaction`, `pi.turn`, `pi.llm_request` spans confirmed in OpenObserve from researcher agent test invocations.
+
 </details>

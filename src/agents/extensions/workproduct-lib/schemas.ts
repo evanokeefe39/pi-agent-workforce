@@ -28,6 +28,7 @@ export const SourceType = Type.Union([
 
 export const CollectionMethod = Type.Union([
   Type.Literal("web_search"),
+  Type.Literal("web_fetch"),
   Type.Literal("api_query"),
   Type.Literal("web_scrape"),
   Type.Literal("deep_research"),

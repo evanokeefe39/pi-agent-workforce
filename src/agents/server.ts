@@ -228,6 +228,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
       modelRegistry: services.modelRegistry,
       resourceLoader: services.resourceLoader,
       sessionManager: SessionManager.inMemory(sessionDir),
+      sessionStartEvent: { type: "session_start", reason: "new" },
     });
     session = result.session;
   } catch (err: any) {
@@ -240,6 +241,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
   }
 
   const sessionId = session.sessionId;
+  await session.bindExtensions({});
   trackRun(traceId, { sessionDir });
   log("info", "session_created", { session_id: sessionId, session_dir: sessionDir, trace_id: traceId, correlation_id: body.correlationId || null });
 
@@ -350,6 +352,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
             modelRegistry: services.modelRegistry,
             resourceLoader: services.resourceLoader,
             sessionManager: SessionManager.inMemory(sessionDir),
+            sessionStartEvent: { type: "session_start", reason: "new" },
           });
           session = retryResult.session;
           session.subscribe(handleSessionEvent);

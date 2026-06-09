@@ -132,6 +132,7 @@ services:
     volumes:
       - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
     ports:
+      - "4317:4317"
       - "4318:4318"
     depends_on:
       - openobserve
@@ -156,7 +157,7 @@ services:
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
       BRIDGE_TIMEOUT_MS: "1800000"
       MAX_CONCURRENT_SESSIONS: "1"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     depends_on:
       artifact-service:
         condition: service_healthy
@@ -185,7 +186,7 @@ services:
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "3"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     volumes:
       - researcher-workspace:/workspace
     depends_on:
@@ -211,7 +212,7 @@ services:
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     deploy:
       resources:
         limits:
@@ -239,7 +240,7 @@ services:
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     deploy:
       resources:
         limits:
@@ -266,7 +267,7 @@ services:
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     volumes:
       - publisher-workspace:/workspace
       - ./project:/project:ro
@@ -289,7 +290,7 @@ services:
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     deploy:
       resources:
         limits:

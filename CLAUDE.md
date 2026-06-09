@@ -12,7 +12,12 @@ Multi-agent workforce — Pi agents in Docker containers orchestrated via pi-sub
 POST http://localhost:8081/invoke  ← planner (deepseek-v4-flash)
   ├─ subagent("researcher", task) → :8082 (deepseek-v4-flash)
   ├─ subagent("data", task)       → :8083 (deepseek-v4-flash)
-  └─ subagent("writer", task)     → :8084 (deepseek-v4-flash)
+  ├─ subagent("writer", task)     → :8084 (deepseek-v4-flash)
+  ├─ subagent("publisher", task)  → :8085 (deepseek-v4-flash)
+  └─ subagent("coder", task)      → :8086 (deepseek-v4-flash)
+
+Agents ──gRPC:4317──▸ OTel Collector ──HTTP──▸ OpenObserve :5080
+                      (artifact-service uses HTTP:4318)
 ```
 
 Delegation blocks until agent completes. Parallel via `tasks: [...]`. Session IDs scope artifacts and correlate across agents.
@@ -23,7 +28,7 @@ Delegation blocks until agent completes. Parallel via `tasks: [...]`. Session ID
 - **SDK:** `@earendil-works/pi-coding-agent` as local dep in package.json
 - **HTTP:** Fastify v5
 - **Artifacts:** Bun service + Postgres + MinIO. RBAC via rbac.json. `artifact://` URIs.
-- **Observability:** Pino + OTel → OpenObserve (:5080)
+- **Observability:** Pino + pi-otel → OTel Collector → OpenObserve (:5080). Agents send gRPC to collector :4317, artifact-service sends HTTP to :4318.
 - **Platform:** Windows 11, Docker Desktop, Git Bash
 
 ## Key files
@@ -39,6 +44,7 @@ Delegation blocks until agent completes. Parallel via `tasks: [...]`. Session ID
 | `src/agents/{name}/.pi/agent/` | Agent config: AGENTS.md (sys prompt), config.yml (models), settings.json |
 | `src/agents/{name}/agent.json` | Agent metadata + validation config (maxTurns, requiredTools) |
 | `src/agents/extensions/` | Pi extensions: artifacts, web-search, web-scrape, deep-research, etc. |
+| `otel-collector-config.yaml` | OTel Collector config — receives gRPC/HTTP from agents, exports HTTP to OpenObserve |
 | `src/artifact-service/` | Bun artifact store (routes.ts, metastore.ts, graph.ts, rbac.ts) |
 | `src/artifact-service/graph.ts` | Graphology-based lineage graph (BFS trace, PROV-JSON export) |
 | `src/lineage-ui/` | React + @xyflow/react lineage visualization (served at /ui/) |
@@ -53,7 +59,7 @@ All agents: DeepSeek V4 Flash ($0.10/M). V4 Pro demoted to plan/review fallback 
 
 ## Session isolation
 
-Each invocation gets `/workspace/sessions/{traceId}/` with `output/`, `workproduct/`, `scratch/` subdirs. server.ts calls `createAgentSession` (not `createAgentSessionFromServices`) with `cwd: sessionDir` so all Pi SDK tools (bash, read, write, edit) operate in the session dir. Extensions write `.meta.json` sidecars alongside files. Replicator (`replicator.ts`) watches for sidecars via `fs.watch` and uploads to MinIO. Agent-complete gate waits for replication before marking run done.
+Each invocation gets `/workspace/sessions/{traceId}/` with `output/`, `workproduct/`, `scratch/` subdirs. server.ts calls `createAgentSession` (not `createAgentSessionFromServices`) with `cwd: sessionDir` and `sessionStartEvent`, then calls `await session.bindExtensions({})` to fire extension lifecycle hooks (required for pi-otel OTel initialization). Extensions write `.meta.json` sidecars alongside files. Replicator (`replicator.ts`) watches for sidecars via `fs.watch` and uploads to MinIO. Agent-complete gate waits for replication before marking run done.
 
 ## Jidoka (output validation)
 
@@ -65,7 +71,7 @@ Each invocation gets `/workspace/sessions/{traceId}/` with `output/`, `workprodu
 
 ## Ports
 
-Planner :8081, Researcher :8082, Data :8083, Writer :8084, Publisher :8085, Coder :8086, Artifacts :8090, Postgres :5432, MinIO :9000/:9001, OpenObserve :5080
+Planner :8081, Researcher :8082, Data :8083, Writer :8084, Publisher :8085, Coder :8086, Artifacts :8090, Postgres :5432, MinIO :9000/:9001, OpenObserve :5080, OTel Collector :4317 (gRPC) / :4318 (HTTP)
 
 ## Running tests
 

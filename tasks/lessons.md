@@ -164,6 +164,24 @@
 
 ---
 
+## Pi SDK extensions require explicit `bindExtensions({})` — silent no-op without it
+
+**Date:** 2026-06-10
+**Trigger:** pi-otel configured on all agents (settings.json otel block, pi-otel npm-installed in container), but zero traces reached OpenObserve. Root cause: server.ts called `createAgentSession` but never called `session.bindExtensions({})`. The Pi SDK's extension lifecycle hooks (`session_start`, `before_agent_start`, etc.) only fire AFTER `bindExtensions` is called. Without it, pi-otel's `session_start` handler never runs, OTel SDK never initializes, no spans are created.
+**Rule:** `createAgentSession` creates the session object but does NOT activate extensions. You must call `await session.bindExtensions({})` after session creation to fire extension lifecycle events. This is not documented prominently — the only evidence is in agent-session.js where `bindExtensions` calls `this._extensionRunner.emit(this._sessionStartEvent)`. Also pass `sessionStartEvent: { type: "session_start", reason: "new" }` in the `createAgentSession` config to ensure the event payload is correct.
+**How to apply:** Any server.ts change that touches session creation must preserve the `bindExtensions({})` call. If adding a new agent type or changing session initialization flow, verify OTel traces still appear in OpenObserve after the change.
+
+---
+
+## pi-otel HTTP path bug — use gRPC protocol to avoid it
+
+**Date:** 2026-06-10
+**Trigger:** Even after wiring pi-otel to an OTel Collector, traces failed with HTTP protocol. Root cause: pi-otel's `pickByProtocol` passes `url: cfg.endpoint` directly to OTel HTTP exporters without appending signal-specific paths (`/v1/traces`, `/v1/metrics`, `/v1/logs`). The OTel HTTP exporters expect the base URL and handle path appending themselves, but pi-otel's usage bypasses that. gRPC protocol doesn't use URL paths (uses service definitions), so it's unaffected.
+**Rule:** When configuring pi-otel, always use `"protocol": "grpc"` in settings.json. The HTTP protocol path has a known bug in `pickByProtocol` (sdk.js) that sends requests to the base endpoint without signal paths. gRPC avoids this entirely. An OTel Collector sits between agents and OpenObserve — agents send gRPC to collector:4317, collector exports HTTP (with correct paths) to OpenObserve.
+**How to apply:** All agent settings.json files must have `"protocol": "grpc"` and `"endpoint": "http://otel-collector:4317"`. The artifact-service (which uses a custom logger.mjs with `fetch()` and manually appends `/v1/logs`) connects to collector:4318 (HTTP). Never point pi-otel directly at OpenObserve — always go through the collector.
+
+---
+
 ## Artifact type normalization belongs at source and destination, not in the pipe
 
 **Date:** 2026-06-09

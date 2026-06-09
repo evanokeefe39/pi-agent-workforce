@@ -20,8 +20,8 @@
   },
   "otel": {
     "enabled": true,
-    "endpoint": "http://otel-collector:4318",
-    "protocol": "http",
+    "endpoint": "http://otel-collector:4317",
+    "protocol": "grpc",
     "serviceName": "data-agent",
     "captureContent": "metadata_only",
     "signals": { "traces": true, "metrics": true, "logs": true }

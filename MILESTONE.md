@@ -14,6 +14,7 @@ Same brief as M0 but with every subsystem wired correctly. The goal is proving a
 
 - Artifact store: Bun service + Postgres metadata + MinIO blob storage, RBAC via rbac.json, artifact:// URI scheme, HTTP client in extensions/artifacts/client.ts
 - Structured logging: Pino + OTel shipping to OpenObserve (replaced Aspire Dashboard)
+- OTel traces: pi-otel → OTel Collector (gRPC :4317) → OpenObserve. Spans: pi.interaction, pi.turn, pi.llm_request per agent invocation
 - Standardized workproducts: ADMIRALTY-graded findings via workproduct-lib, JSONL persistence
 - Concurrent server: Fastify v5 HTTP server (server.mjs) with SessionManager, per-container MAX_CONCURRENT_SESSIONS
 - Planner delegation: pi-subagents-http vendored extension, parallel task dispatch via `tasks: [...]`
@@ -161,6 +162,53 @@ Two-phase research: Phase 1 wide survey of faceless YouTube channels across 8 ni
 ### Blockers
 
 No longer blocked on M1 (done). Blocked on: researcher parallel tool fanout (multi-niche concurrent research).
+
+### Status
+
+Not started.
+
+---
+
+## M5: Niche Growth Analysis — IG & TikTok in Tech/AI/Creator Space
+
+Production-quality social media growth analysis across Instagram and TikTok. Covers tech-adjacent niches (AI, building in public, vibe coding, AI agencies, solopreneurs, tech opinion/investing/news) segmented by follower tier (0-1k, 1-10k, 10-50k, 50-100k, 100k+). Structured data model for growth, engagement, and monetization metrics. Deliverables: detailed analytical report + ready-to-publish IG carousel decks + TikTok content pieces. This is the high-bar version of what M0 prototyped.
+
+Spec: `tasks/specs/niche-growth-analysis.md`
+
+### Success criteria
+
+- [ ] Researcher uses multiple tools (deep_research + Apify + web_search) with at least 30% primary platform data
+- [ ] Structured findings cover at least 3 of 5 follower tiers and 3 of 5+ niches
+- [ ] Data agent computes tier benchmarks, cross-tier comparisons, engagement/growth metrics from raw findings
+- [ ] Report is 3,000+ words, analytical tone, data-backed, with per-tier and per-niche sections
+- [ ] Report contains actionable recommendations (specific, not generic) and anti-patterns
+- [ ] At least 3 IG carousel decks rendered by coder using design system components
+- [ ] At least 2 TikTok content pieces (scripts or visual decks) with platform-native tone
+- [ ] Social content uses data from the report — not generic advice
+- [ ] Final bundle: 10+ artifacts with traceable lineage from research → analysis → report → content
+- [ ] E2E test validates quality (finding specificity, tone, data references, tool diversity, bundle completeness) not just existence
+- [ ] Pipeline completes autonomously — no manual intervention beyond initial prompt
+
+### E2E test approach
+
+E2E-60 checks quality, not just pass/fail. Key quality gates:
+
+**Researcher:** tool diversity (2+ tools), finding specificity (50%+ contain handles or numbers), primary data (5+ Apify findings), tier/niche coverage, anti-patterns present, ADMIRALTY grades varied.
+
+**Data agent:** SQL queries ran, metrics computed, cross-tier comparison, at least 1 chart.
+
+**Report:** length, structure (tier + niche sections), 10+ specific numbers cited, confidence hedging, 5+ actionable recs, anti-patterns, analytical tone (no hype words).
+
+**Social content:** 3+ IG pieces, 2+ TikTok pieces, tone shift from report, hooks present, data references, platform differentiation.
+
+**Coder:** design system components used, 3+ rendered slide images, multiple carousel concepts.
+
+**Bundle:** report + research data + IG slides + TikTok content + captions + lineage chain. 10+ total artifacts.
+
+### Blockers
+
+- Researcher parallel tool fanout — critical for multi-source research quality
+- Planner routing to coder for carousel rendering (partially done via routing hints)
 
 ### Status
 
