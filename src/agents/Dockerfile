@@ -61,14 +61,19 @@ COPY ceo/agent.json /app/ceo/agent.json
 FROM base AS coder
 COPY coder/.pi/agent/ /root/.pi/agent/
 COPY coder/agent.json /app/coder/agent.json
+COPY skills/brand-guidelines/ /root/.pi/agent/skills/brand-guidelines/
+COPY skills/platform-formats/ /root/.pi/agent/skills/platform-formats/
 
 FROM base AS qa
 COPY qa/.pi/agent/ /root/.pi/agent/
 COPY qa/agent.json /app/qa/agent.json
+COPY skills/brand-guidelines/ /root/.pi/agent/skills/brand-guidelines/
 
 FROM base AS publisher
 COPY publisher/.pi/agent/ /root/.pi/agent/
 COPY publisher/agent.json /app/publisher/agent.json
+COPY skills/brand-guidelines/ /root/.pi/agent/skills/brand-guidelines/
+COPY skills/platform-formats/ /root/.pi/agent/skills/platform-formats/
 
 # ============================================================
 # RESEARCHER — lightweight scraping (Python + Scrapling + Cheerio)
