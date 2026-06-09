@@ -30,6 +30,16 @@
       ],
       "write": ["*/*/writer/**"]
     },
+    "publisher": {
+      "read": [
+        "*/*/publisher/**",
+        "*/*/writer/**",
+        "*/*/coder/**",
+        "*/*/data/**",
+        "*/*/qa/**"
+      ],
+      "write": ["*/*/publisher/**"]
+    },
     "coder": {
       "read": [
         "*/*/coder/**",
