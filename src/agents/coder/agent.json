@@ -4,7 +4,7 @@
   "title": "Software Engineer",
   "icon": "code",
   "reportsTo": "CEO",
-  "capabilities": "Code execution, analysis, implementation, testing within sandboxed container",
+  "capabilities": "Code execution, analysis, implementation, visual rendering from design system (carousels, reports, presentations, dashboards via React + Playwright), testing within sandboxed container",
   "adapterType": "http",
   "adapterConfig": {
     "url": "http://coder:8080/invoke",
