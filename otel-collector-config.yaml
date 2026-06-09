@@ -1,0 +1,23 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+exporters:
+  otlp_http:
+    endpoint: http://openobserve:5080/api/default
+    headers:
+      Authorization: "Basic ${env:ZO_OTLP_AUTH}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [otlp_http]
+    metrics:
+      receivers: [otlp]
+      exporters: [otlp_http]
+    logs:
+      receivers: [otlp]
+      exporters: [otlp_http]

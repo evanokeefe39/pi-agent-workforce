@@ -43,6 +43,73 @@ This replaces the current pattern where agents call `write_artifact` (an HTTP PO
 - Shared flat directory across concurrent sessions — collision, data leakage (current bug).
 - Per-session containers or microVMs — correct but overengineered for our scale and Docker Compose deployment.
 
+## Component Architecture
+
+Six modules with clear boundaries. Dependencies flow downward. No module reaches into another's concern.
+
+```
+server.ts — orchestration
+  │  Session lifecycle, HTTP routes, wires everything together.
+  │  Does NOT contain validation logic, file I/O, or replication logic.
+  │
+  ├─► jidoka.ts — output validation
+  │     validateRun(config, toolCalls, usage) → { pass, errors[] }
+  │     Pure function. No I/O. No side effects.
+  │
+  ├─► replicator.ts — file sync
+  │     watch(root) — starts fs.watch on sessions/
+  │     waitForSession(dir, timeout) → { ok, outstanding }
+  │     Depends on ArtifactStore interface (not HTTP directly).
+  │
+  └─► artifact-store.ts — storage abstraction (interface)
+        upload(meta, content) → { id, ref, deduplicated }
+        query(filters) → ArtifactRecord[]
+        read(id) → { content, metadata }
+        HTTP implementation calls artifact service. Tests inject mock.
+```
+
+Extensions are self-contained — they use plain fs and follow a file convention:
+
+```
+workproduct extensions (record_query_result, record_metric, etc.)
+  │  Validate params (TypeBox schema).
+  │  Write file to {cwd}/workproduct/{type}/ using plain fs (atomic: tmp + rename).
+  │  Write .meta.json sidecar alongside it (convention — replicator picks it up).
+  │  Append to {cwd}/provenance.jsonl.
+  │  No imports from server layer. npm-installable. Self-contained.
+  │
+artifact extension (write_artifact, read_artifact, list_artifacts)
+  │  write_artifact: write to {cwd}/output/ with .meta.json sidecar. Plain fs.
+  │  read_artifact: HTTP to artifact service. Unchanged.
+  │  list_artifacts: HTTP to artifact service. Unchanged.
+```
+
+The .meta.json sidecar is a convention, not a dependency. Any extension can write one.
+The replicator watches for .meta.json files. Extensions and replicator never import each other.
+
+### SOLID compliance
+
+| Principle | How enforced |
+|-----------|-------------|
+| **Single Responsibility** | server.ts orchestrates. jidoka.ts validates. replicator.ts syncs. Extensions own their domain logic + file writes. |
+| **Open/Closed** | New jidoka checks = new function in jidoka.ts. New extensions = follow .meta.json convention, auto-replicated. New storage backend = new ArtifactStore implementation. |
+| **Dependency Inversion** | Extensions depend on fs (stdlib) and ctx.sessionManager (Pi SDK injection), not on any server module. Replicator depends on ArtifactStore (interface), not fetch (concrete). |
+| **Interface Segregation** | ArtifactStore has upload/query/read. Replicator only uses upload. read_artifact only uses read. Extensions don't use ArtifactStore at all. |
+| **DRY** | Sidecar format is a documented JSON schema — each extension writes it inline (3 lines of code). Not worth a shared module for a JSON convention. Atomic write pattern is 2 lines (writeFileSync tmp, renameSync) — repeated is simpler than abstracted. |
+
+### Coupling/Cohesion
+
+**Loose coupling between modules:**
+- Extensions ↔ replicator: zero coupling. Connected only through filesystem convention (.meta.json files). Neither imports the other.
+- Extensions ↔ server: zero coupling. Extensions are npm packages. Server creates the session dir and passes cwd via Pi SDK ctx.
+- server.ts ↔ jidoka: function call with plain data in, plain data out. No shared state.
+- replicator ↔ artifact service: via ArtifactStore interface, not HTTP directly.
+
+**High cohesion within modules:**
+- jidoka: everything about validating agent output quality.
+- replicator: everything about syncing local files to remote storage.
+- extensions: domain validation + file writing. Self-contained.
+
 ## Design
 
 ### Session Directory Convention
@@ -271,20 +338,39 @@ What decisions are reserved for human review:
 
 ## Resolved Questions
 
-### 1. Pi SDK cwd handling — CONFIRMED: session cwd propagates to all tools
+### 1. Pi SDK cwd handling — CORRECTED: createAgentSessionFromServices hardcodes services.cwd
 
-Investigated the Pi SDK source (`@earendil-works/pi-coding-agent/dist/core/`). The cwd flows through the entire stack:
+**Original claim (WRONG):** "The fix is one line — change `SessionManager.inMemory()` to `SessionManager.inMemory(sessionDir)`."
 
-- `SessionManager.inMemory(cwd)` stores cwd as resolved absolute path (session-manager.js:517)
-- `createAgentSessionFromServices` passes `services.cwd` to `createAgentSession` (agent-session-services.js:102)
-- `AgentSession` stores cwd in `this._cwd` and passes it to `createAllToolDefinitions(this._cwd, ...)` (agent-session.js:1904)
-- Bash tool passes cwd to `spawn(..., { cwd })` — child process runs in the session directory (bash.js:39)
-- File tools resolve paths via `resolveToCwd(path, cwd)` — relative paths resolve against session dir (read.js:154, write.js:141, edit.js:176)
-- The SDK never calls `process.chdir()` — it threads cwd explicitly through every operation
+**What actually happens:** `createAgentSessionFromServices` always passes `options.services.cwd` to `createAgentSession`:
 
-**The fix is one line in server.ts:** change `SessionManager.inMemory()` to `SessionManager.inMemory(sessionDir)`. All built-in tools (bash, read, write, edit, grep, find, ls) will automatically operate within the session directory.
+```js
+// agent-session-services.js — services.cwd overrides sessionManager.getCwd()
+return createAgentSession({
+    cwd: options.services.cwd,  // ← hardcoded from boot-time services
+    ...
+});
+```
 
-Custom extensions (workproduct.ts, duckdb, etc.) currently use `process.cwd()` and must be updated to accept session cwd from the execution context (`ctx.sessionManager.getCwd()`).
+And `createAgentSession` resolves cwd as: `options.cwd ?? sessionManager.getCwd() ?? process.cwd()`. Since `services.cwd` is always present, the sessionManager fallback never triggers.
+
+**Actual fix:** Call `createAgentSession` directly with per-session cwd + reused services:
+
+```ts
+const result = await createAgentSession({
+  cwd: sessionDir,
+  agentDir: services.agentDir,
+  authStorage: services.authStorage,
+  settingsManager: services.settingsManager,
+  modelRegistry: services.modelRegistry,
+  resourceLoader: services.resourceLoader,
+  sessionManager: SessionManager.inMemory(sessionDir),
+});
+```
+
+**Verified by E2E-35:** agent bash `pwd` returns `/workspace/sessions/{traceId}`, concurrent sessions fully isolated.
+
+Custom extensions use `ctx.sessionManager.getCwd()` for session-scoped paths — this works correctly because AgentSession passes `this._cwd` to extensions via ctx.
 
 ### 2. fs.watch reliability — CONFIRMED: works on named volumes, use atomic writes
 

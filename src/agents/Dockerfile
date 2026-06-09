@@ -9,7 +9,7 @@ RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/lo
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --production
-COPY server.ts logger.mjs ./
+COPY server.ts logger.mjs jidoka.ts replicator.ts artifact-store.ts ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/deep-research/ /root/.pi/agent/extensions/deep-research/
 COPY extensions/duckdb/ /root/.pi/agent/extensions/duckdb/
@@ -19,6 +19,7 @@ COPY extensions/web-search.ts /root/.pi/agent/extensions/web-search.ts
 COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
 RUN pi extensions install || true
+RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && npm install pi-otel 2>/dev/null || true
 ENV WORKSPACE_DIR=/workspace
 RUN mkdir -p /workspace
 EXPOSE 8080
@@ -38,13 +39,14 @@ RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/lo
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --production
-COPY server.ts logger.mjs ./
+COPY server.ts logger.mjs jidoka.ts replicator.ts artifact-store.ts ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/subagent-http/ /root/.pi/agent/extensions/subagent-http/
 RUN cd /root/.pi/agent/extensions/subagent-http && npm install --omit=dev 2>/dev/null || true
 COPY planner/.pi/agent/ /root/.pi/agent/
 COPY planner/agent.json /app/planner/agent.json
 RUN pi extensions install || true
+RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && npm install pi-otel 2>/dev/null || true
 RUN mkdir -p /workspace
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \

@@ -146,9 +146,27 @@
 
 ---
 
+## SDK bugs need server-level resilience, not just SDK patches
+
+**Date:** 2026-06-09
+**Trigger:** Pi SDK crashes with "Cannot continue from message role: assistant" after planner's third subagent returns. Root cause: `handleRunFailure` stacks a second assistant message; `_prepareRetry` only pops one. All subagent work completes but planner output is lost.
+**Rule:** When depending on a third-party SDK's internal message/state management, the server must handle SDK-internal failures gracefully. The SDK's retry logic has a known double-assistant-message bug — our server can't fix the SDK, but it can: (1) detect the specific error pattern, (2) return captured output if subagents already completed (degraded success), (3) retry with a fresh session if no output was captured.
+**How to apply:** Any new error pattern from the SDK should be caught in server.ts with specific detection (regex match), not generic error handling. Log the SDK error details (attempt, output length, turns completed) so the pattern is debuggable. The retry creates a fresh session — usage/output accumulators survive across retries since they're declared outside the retry loop.
+
+---
+
 ## Tool parameters for binary content must support file paths, not just strings
 
 **Date:** 2026-06-09
 **Trigger:** Coder agent rendered a 38KB PNG carousel slide correctly, then called write_artifact with the file path as the content string (not the actual binary data). The extension wrote the 29-byte path string as the artifact. write_artifact only accepted a `content: string` parameter — impossible to pass binary data through an LLM tool call string parameter.
 **Rule:** Any tool that agents use to publish files must support a `file_path` parameter alongside `content`. Agents render binary files to disk (via Playwright, ffmpeg, etc.) and cannot pass binary data through string parameters. The tool reads the file from disk when given a path.
 **How to apply:** When adding new write/publish tools to extensions, always include a file_path alternative. Check existing tools for the same gap — any tool that writes files and only accepts string content will break on binary output.
+
+---
+
+## Artifact type normalization belongs at source and destination, not in the pipe
+
+**Date:** 2026-06-09
+**Trigger:** Replicator upload failed with Postgres CHECK constraint violation — planner wrote a manifest file with an artifact_type not in the allowed list. Initial fix put type normalization in replicator.ts, which was wrong — replicator is a dumb pipe. Adding type knowledge to the replicator couples it to every agent's domain vocabulary.
+**Rule:** Type normalization happens at two boundaries: (1) the source — workproduct extensions in each agent that standardize types before writing .meta.json sidecars, (2) the destination — artifact service routes.ts that normalizes on ingest as a safety net. The replicator passes artifact_type through untouched. If a new agent invents a new type, you update the workproduct extension for that agent and the artifact service constraint — never the replicator.
+**How to apply:** When adding new artifact types: add to Postgres CHECK constraint, add to artifact service VALID_ARTIFACT_TYPES set, add normalization to the producing agent's workproduct extension. Replicator stays unchanged.

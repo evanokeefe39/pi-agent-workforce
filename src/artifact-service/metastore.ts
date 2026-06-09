@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import type { ArtifactRecord, ListQuery } from "./types";
+import type { ArtifactRecord, ListQuery, EdgeRecord, EdgeInsert } from "./types";
 
 const DATABASE_URL =
   process.env.DATABASE_URL ||
@@ -146,8 +146,139 @@ export async function checkConnection(): Promise<boolean> {
 }
 
 // ---------------------------------------------------------------------------
+// Lineage edges
+// ---------------------------------------------------------------------------
+
+/** Insert one or more lineage edges. Skips duplicates (ON CONFLICT DO NOTHING). */
+export async function insertEdges(edges: EdgeInsert[]): Promise<void> {
+  if (edges.length === 0) return;
+  for (const e of edges) {
+    await sql`
+      INSERT INTO artifact_edges (source_id, target_id, edge_type, metadata)
+      VALUES (
+        ${e.source_id},
+        ${e.target_id},
+        ${e.edge_type},
+        ${JSON.stringify(e.metadata ?? {})}::jsonb
+      )
+      ON CONFLICT (source_id, target_id, edge_type) DO NOTHING
+    `;
+  }
+}
+
+/** Get all edges where the given artifact is source or target. */
+export async function getEdgesByArtifact(
+  artifactId: string,
+): Promise<EdgeRecord[]> {
+  const rows = await sql`
+    SELECT source_id, target_id, edge_type, metadata, created_at
+    FROM artifact_edges
+    WHERE source_id = ${artifactId} OR target_id = ${artifactId}
+    ORDER BY created_at
+  `;
+  return rows.map(toEdge);
+}
+
+/** Get all edges for artifacts within a run. */
+export async function getEdgesByRunId(
+  runId: string,
+): Promise<EdgeRecord[]> {
+  const rows = await sql`
+    SELECT e.source_id, e.target_id, e.edge_type, e.metadata, e.created_at
+    FROM artifact_edges e
+    JOIN artifacts a ON a.id = e.source_id OR a.id = e.target_id
+    WHERE a.run_id = ${runId}
+    GROUP BY e.source_id, e.target_id, e.edge_type, e.metadata, e.created_at
+    ORDER BY e.created_at
+  `;
+  return rows.map(toEdge);
+}
+
+/** Delete edges by source, target, or both. */
+export async function deleteEdges(
+  filter: { source_id?: string; target_id?: string },
+): Promise<number> {
+  if (!filter.source_id && !filter.target_id) return 0;
+
+  if (filter.source_id && filter.target_id) {
+    const result = await sql`
+      DELETE FROM artifact_edges
+      WHERE source_id = ${filter.source_id} AND target_id = ${filter.target_id}
+    `;
+    return result.count;
+  }
+  if (filter.source_id) {
+    const result = await sql`
+      DELETE FROM artifact_edges WHERE source_id = ${filter.source_id}
+    `;
+    return result.count;
+  }
+  const result = await sql`
+    DELETE FROM artifact_edges WHERE target_id = ${filter.target_id}
+  `;
+  return result.count;
+}
+
+/** Recursive CTE: get ancestors (upstream) of an artifact. */
+export async function getAncestors(
+  artifactId: string,
+  maxDepth: number = 10,
+): Promise<Array<{ source_id: string; target_id: string; edge_type: string; depth: number }>> {
+  const rows = await sql`
+    WITH RECURSIVE lineage AS (
+      SELECT source_id, target_id, edge_type, 1 as depth
+      FROM artifact_edges WHERE target_id = ${artifactId}
+      UNION ALL
+      SELECT e.source_id, e.target_id, e.edge_type, l.depth + 1
+      FROM artifact_edges e JOIN lineage l ON e.target_id = l.source_id
+      WHERE l.depth < ${maxDepth}
+    )
+    SELECT DISTINCT source_id, target_id, edge_type, depth FROM lineage
+    ORDER BY depth
+  `;
+  return rows as Array<{ source_id: string; target_id: string; edge_type: string; depth: number }>;
+}
+
+/** Recursive CTE: get descendants (downstream) of an artifact. */
+export async function getDescendants(
+  artifactId: string,
+  maxDepth: number = 10,
+): Promise<Array<{ source_id: string; target_id: string; edge_type: string; depth: number }>> {
+  const rows = await sql`
+    WITH RECURSIVE lineage AS (
+      SELECT source_id, target_id, edge_type, 1 as depth
+      FROM artifact_edges WHERE source_id = ${artifactId}
+      UNION ALL
+      SELECT e.source_id, e.target_id, e.edge_type, l.depth + 1
+      FROM artifact_edges e JOIN lineage l ON e.source_id = l.target_id
+      WHERE l.depth < ${maxDepth}
+    )
+    SELECT DISTINCT source_id, target_id, edge_type, depth FROM lineage
+    ORDER BY depth
+  `;
+  return rows as Array<{ source_id: string; target_id: string; edge_type: string; depth: number }>;
+}
+
+// ---------------------------------------------------------------------------
 // Internal helper
 // ---------------------------------------------------------------------------
+
+/** Map a raw DB row to a typed EdgeRecord. */
+function toEdge(row: Record<string, unknown>): EdgeRecord {
+  return {
+    source_id: row.source_id as string,
+    target_id: row.target_id as string,
+    edge_type: row.edge_type as EdgeRecord["edge_type"],
+    metadata:
+      typeof row.metadata === "string"
+        ? JSON.parse(row.metadata)
+        : (row.metadata as Record<string, unknown>) ?? {},
+    created_at:
+      row.created_at instanceof Date
+        ? row.created_at
+        : new Date(row.created_at as string),
+  };
+}
 
 /** Map a raw DB row to a typed ArtifactRecord. */
 function toRecord(row: Record<string, unknown>): ArtifactRecord {

@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { ulid } from "./workproduct-lib/ulid.js";
+import { createHash } from "node:crypto";
 import { validateByStyle, type StyleProfiles } from "./workproduct-lib/validate.js";
 import { ArtifactRef, ISODate } from "./workproduct-lib/schemas.js";
 
@@ -42,14 +42,48 @@ function asError(msg: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Local filesystem storage helpers
+// Storage — plain fs, self-contained. Writes .meta.json sidecar as convention
+// for replicator to pick up. No shared module dependency.
 // ---------------------------------------------------------------------------
-function getWorkDir(): string {
-  return path.join(process.cwd(), "workproduct", "data");
+
+const TYPE_DIRS: Record<string, string> = {
+  dataset_ref: "datasets",
+  query_result: "queries",
+  metric: "metrics",
+  chart: "charts",
+};
+
+const METHOD_MAP: Record<string, string> = {
+  dataset_ref: "collection",
+  query_result: "transformation",
+  metric: "derivation",
+  chart: "visualization",
+};
+
+function getSessionCwd(ctx?: any): string {
+  return ctx?.sessionManager?.getCwd?.() || process.cwd();
 }
 
-function ensureDir(dir: string): void {
-  fs.mkdirSync(dir, { recursive: true });
+function ulid(): string {
+  try {
+    const mod = require("./workproduct-lib/ulid.js");
+    return mod.ulid();
+  } catch {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+}
+
+function extractInputs(metadata: Record<string, unknown>): string[] {
+  const inputs: string[] = [];
+  for (const key of ["source_query_ref", "data_ref"]) {
+    const ref = metadata[key] as Record<string, unknown> | undefined;
+    if (ref?.id) inputs.push(ref.id as string);
+  }
+  for (const key of ["source_dataset_refs", "related_artifacts"]) {
+    const refs = metadata[key] as Array<Record<string, unknown>> | undefined;
+    if (refs) for (const ref of refs) { if (ref.id) inputs.push(ref.id as string); }
+  }
+  return inputs;
 }
 
 interface LocalRecord {
@@ -62,47 +96,101 @@ interface LocalRecord {
   metadata: Record<string, unknown>;
 }
 
-function writeLocal(type: string, filename: string, content: string, metadata: Record<string, unknown>): { id: string } {
-  const dir = getWorkDir();
-  ensureDir(dir);
+function writeLocal(
+  type: string,
+  filename: string,
+  content: string,
+  metadata: Record<string, unknown>,
+  ctx?: any,
+): { id: string } {
+  const cwd = getSessionCwd(ctx);
+  const subdir = TYPE_DIRS[type] || type;
+  const dir = path.join(cwd, "workproduct", subdir);
+  fs.mkdirSync(dir, { recursive: true });
+
   const id = ulid();
-  const record: LocalRecord = {
+  const timestamp = new Date().toISOString();
+  const sessionId = getSessionId(ctx);
+
+  const record: LocalRecord = { id, agent: AGENT_NAME, type, filename, timestamp, content, metadata };
+  const recordJson = JSON.stringify(record, null, 2);
+  const fullFilename = `${id}_${filename}`;
+  const filePath = path.join(dir, fullFilename);
+
+  // Atomic write: tmp then rename
+  fs.writeFileSync(filePath + ".tmp", recordJson);
+  fs.renameSync(filePath + ".tmp", filePath);
+
+  // .meta.json sidecar — convention for replicator
+  const inputs = extractInputs(metadata);
+  const sidecar = {
     id,
-    agent: AGENT_NAME,
-    type,
     filename,
-    timestamp: new Date().toISOString(),
-    content,
-    metadata,
+    artifact_type: type === "query_result" || type === "dataset_ref" ? "dataset" : type,
+    agent_name: AGENT_NAME,
+    session_id: sessionId,
+    created_at: timestamp,
+    content_hash: "sha256:" + createHash("sha256").update(recordJson).digest("hex"),
+    size_bytes: Buffer.byteLength(recordJson, "utf-8"),
+    mime_type: "application/json",
+    lineage: { inputs, method: METHOD_MAP[type] || "unknown" },
+    tags: (metadata.topic_tags as string[]) || [],
   };
-  fs.writeFileSync(path.join(dir, `${id}-${type}.json`), JSON.stringify(record, null, 2));
+  fs.writeFileSync(filePath + ".meta.json.tmp", JSON.stringify(sidecar, null, 2));
+  fs.renameSync(filePath + ".meta.json.tmp", filePath + ".meta.json");
+
+  // Provenance manifest — append-only log
+  const provPath = path.join(cwd, "provenance.jsonl");
+  fs.appendFileSync(provPath, JSON.stringify({
+    ts: timestamp, tool: `record_${type}`, id,
+    path: `workproduct/${subdir}/${fullFilename}`,
+    inputs, method: METHOD_MAP[type] || "unknown",
+  }) + "\n");
+
   return { id };
 }
 
-function readLocal(id: string): LocalRecord | null {
-  const dir = getWorkDir();
-  if (!fs.existsSync(dir)) return null;
-  const files = fs.readdirSync(dir);
-  const match = files.find(f => f.startsWith(id));
-  if (!match) return null;
-  return JSON.parse(fs.readFileSync(path.join(dir, match), "utf8"));
+function readLocal(id: string, ctx?: any): LocalRecord | null {
+  const dir = path.join(getSessionCwd(ctx), "workproduct");
+  return findRecordById(dir, id);
 }
 
-function listLocal(filters?: { type?: string; session_id?: string; since?: string }): LocalRecord[] {
-  const dir = getWorkDir();
+function listLocal(filters?: { type?: string; session_id?: string; since?: string }, ctx?: any): LocalRecord[] {
+  const dir = path.join(getSessionCwd(ctx), "workproduct");
   if (!fs.existsSync(dir)) return [];
-  const files = fs.readdirSync(dir).filter(f => f.endsWith(".json"));
   const records: LocalRecord[] = [];
-  for (const f of files) {
+  walkJsonFiles(dir, (filePath) => {
     try {
-      const rec = JSON.parse(fs.readFileSync(path.join(dir, f), "utf8")) as LocalRecord;
-      if (filters?.type && rec.type !== filters.type) continue;
-      if (filters?.session_id && rec.metadata.session_id !== filters.session_id) continue;
-      if (filters?.since && rec.timestamp < filters.since) continue;
+      const rec = JSON.parse(fs.readFileSync(filePath, "utf8")) as LocalRecord;
+      if (filters?.type && rec.type !== filters.type) return;
+      if (filters?.session_id && rec.metadata.session_id !== filters.session_id) return;
+      if (filters?.since && rec.timestamp < filters.since) return;
       records.push(rec);
-    } catch { /* skip corrupt files */ }
-  }
+    } catch { /* skip */ }
+  });
   return records.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
+
+function findRecordById(dir: string, id: string): LocalRecord | null {
+  if (!fs.existsSync(dir)) return null;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const found = findRecordById(full, id);
+      if (found) return found;
+    } else if (entry.name.startsWith(id) && entry.name.endsWith(".json") && !entry.name.endsWith(".meta.json")) {
+      try { return JSON.parse(fs.readFileSync(full, "utf8")); } catch { return null; }
+    }
+  }
+  return null;
+}
+
+function walkJsonFiles(dir: string, cb: (filePath: string) => void): void {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) { walkJsonFiles(full, cb); }
+    else if (entry.name.endsWith(".json") && !entry.name.endsWith(".meta.json")) { cb(full); }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +229,7 @@ export default function (pi: ExtensionAPI) {
       topic_tags: Type.Optional(Type.Array(Type.String())),
       related_artifacts: Type.Optional(Type.Array(ArtifactRef)),
     }),
-    async execute(_toolCallId, params, _signal) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const { source, table, path } = params as { source: string; table?: string; path?: string };
 
@@ -185,8 +273,8 @@ export default function (pi: ExtensionAPI) {
           caveats: params.caveats,
           topic_tags: params.topic_tags,
           related_artifacts: params.related_artifacts,
-          session_id: getSessionId(),
-        });
+          session_id: getSessionId(ctx),
+        }, ctx);
 
         const lines = [`Dataset reference recorded.`, `ID: ${result.id}`];
         if (warnings.length > 0) {
@@ -226,7 +314,7 @@ export default function (pi: ExtensionAPI) {
         description: "Inline rows (max 100). For larger results, write to an artifact and pass result_artifact_ref instead.",
       })),
     }),
-    async execute(_toolCallId, params, _signal) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const rows = params.rows_inline;
         if (Array.isArray(rows) && rows.length > 100) {
@@ -271,8 +359,8 @@ export default function (pi: ExtensionAPI) {
           duration_ms: params.duration_ms,
           topic_tags: params.topic_tags,
           inline_rows: Array.isArray(rows) ? rows.length : 0,
-          session_id: getSessionId(),
-        });
+          session_id: getSessionId(ctx),
+        }, ctx);
 
         const lines = [`Query result recorded.`, `ID: ${result.id}`, `Rows: ${params.row_count}`];
         if (warnings.length > 0) {
@@ -315,7 +403,7 @@ export default function (pi: ExtensionAPI) {
         v: Type.Union([Type.Number(), Type.String()]),
       }))),
     }),
-    async execute(_toolCallId, params, _signal) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const { errors, warnings } = validateByStyle(
           KIND_PROFILES,
@@ -342,8 +430,8 @@ export default function (pi: ExtensionAPI) {
           confidence: params.confidence,
           topic_tags: params.topic_tags,
           entities: params.entities,
-          session_id: getSessionId(),
-        });
+          session_id: getSessionId(ctx),
+        }, ctx);
 
         const lines = [`Metric recorded.`, `ID: ${result.id}`, `Name: ${params.name}`, `Value: ${params.value}${params.unit ? " " + params.unit : ""}`];
         if (warnings.length > 0) {
@@ -381,7 +469,7 @@ export default function (pi: ExtensionAPI) {
       caveats: Type.Optional(Type.String()),
       topic_tags: Type.Optional(Type.Array(Type.String())),
     }),
-    async execute(_toolCallId, params, _signal) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const { errors, warnings } = validateByStyle(
           KIND_PROFILES,
@@ -408,8 +496,9 @@ export default function (pi: ExtensionAPI) {
             title: params.title,
             caveats: params.caveats,
             topic_tags: params.topic_tags,
-            session_id: getSessionId(),
+            session_id: getSessionId(ctx),
           },
+          ctx,
         );
 
         const lines = [`Chart recorded.`, `ID: ${result.id}`, `Type: ${params.chart_type}`];
@@ -446,15 +535,15 @@ export default function (pi: ExtensionAPI) {
       since: Type.Optional(Type.String({ description: "ISO 8601 timestamp" })),
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 200, default: 50 })),
     }),
-    async execute(_toolCallId, params, _signal) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
         const limit = params.limit ?? 50;
 
         let records: LocalRecord[];
         if (params.kind) {
-          records = listLocal({ type: params.kind, session_id: params.session_id, since: params.since });
+          records = listLocal({ type: params.kind, session_id: params.session_id, since: params.since }, ctx);
         } else {
-          records = listLocal({ session_id: params.session_id, since: params.since });
+          records = listLocal({ session_id: params.session_id, since: params.since }, ctx);
         }
 
         // Post-filter on topic_tag / entity (metadata is JSON, not a flat scalar).
@@ -513,9 +602,9 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       id: Type.String({ description: "Artifact ULID" }),
     }),
-    async execute(_toolCallId, params, _signal) {
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
-        const rec = readLocal(params.id);
+        const rec = readLocal(params.id, ctx);
         if (!rec) {
           return asError(`no data product found with id '${params.id}'`);
         }

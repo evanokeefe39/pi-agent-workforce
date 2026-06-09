@@ -15,5 +15,13 @@
   "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": true
+  },
+  "otel": {
+    "enabled": true,
+    "endpoint": "http://otel-collector:4318",
+    "protocol": "http",
+    "serviceName": "planner-agent",
+    "captureContent": "metadata_only",
+    "signals": { "traces": true, "metrics": true, "logs": true }
   }
 }

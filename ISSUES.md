@@ -1,5 +1,109 @@
 # Known Issues
 
+## OPEN: Planner SDK crash on multi-hop chains — "Cannot continue from message role: assistant"
+
+**Status:** Mitigated — server-side retry + degraded success in server.ts v5.2.0. SDK bug remains.
+**Severity:** Critical — blocks full pipeline completion (E2E-52 P3-P6)
+
+**Problem:** Planner crashes after third subagent returns in Writer → Coder → Publisher pipeline. All three subagents complete successfully (artifacts created), but planner returns empty output. Error: "Cannot continue from message role: assistant".
+
+**Root Cause Analysis (Five Whys):**
+
+```
+Problem: Planner returns empty output after all 3 subagents complete successfully
+Why 1: Pi SDK throws "Cannot continue from message role: assistant" in agent.continue()
+Why 2: agent.continue() requires last message NOT be role: "assistant", but it is
+Why 3: _prepareRetry() removed only the synthetic error message, leaving the original
+        assistant message that was being built when the failure occurred
+Why 4: handleRunFailure() in pi-agent-core/agent.js stacks a SECOND assistant message
+        on top of the existing one — _prepareRetry only pops one
+Why 5: The retry logic assumes the error message is the ONLY assistant message at the
+        end, but under tool execution failures or transient API errors (429/500/502),
+        there can be two consecutive assistant messages
+```
+
+**Fix:** `_prepareRetry` (pi-coding-agent agent-session.js ~line 1996) needs to pop ALL trailing assistant messages, not just one. Or `handleRunFailure` should replace the last assistant message rather than appending.
+
+**SDK locations:**
+- `pi-agent-core/dist/agent.js` — `Agent.continue()` line 225, `handleRunFailure` line 329
+- `pi-agent-core/dist/agent-loop.js` — `agentLoopContinue` line 27
+- `pi-coding-agent/dist/core/agent-session.js` — `_prepareRetry` line 1977, `_handlePostAgentRun` line 667
+
+**Evidence:**
+- E2E-52: planner state "failed", empty output, 526s duration (consistent with all 3 subagents completing then failing on final turn)
+- All subagent artifacts created: writer 9, coder 8 images, publisher 1
+- DeepSeek V4 Flash returns transient errors under load, triggering the retry path
+
+**Additional context:** Some models support parallel tool calling, others don't. DeepSeek V4 Flash behavior under multi-hop chains with sequential tool calls may contribute to triggering the failure path. Need to verify if model-level parallel tool calling support affects message ordering.
+
+**Mitigation applied (server.ts v5.2.0):**
+- Detect SDK message role error via regex match
+- If output captured (subagents completed) → degraded success, return captured output
+- If no output → retry with fresh session (MAX_PROMPT_RETRIES=2, configurable via env)
+- Named event handler (`handleSessionEvent`) re-attached on retry; usage/output accumulators survive across attempts
+
+**Verified:** E2E-52 rerun 2026-06-09 — 10/10 passed, planner completed in 527s. Retry/degraded success mitigation confirmed working after container rebuild to v5.2.0.
+
+**Remaining:**
+1. Report upstream to @earendil-works/pi-coding-agent — `_prepareRetry` should pop ALL trailing assistant messages
+2. Investigate whether model-level parallel tool calling support affects message ordering
+
+---
+
+## OPEN: Coder rendering quality — inline HTML instead of design system components
+
+**Status:** Open
+**Severity:** Medium — functional but suboptimal output quality
+
+**Problem:** Coder agent writes its own inline HTML for rendering instead of using design system components (Card, CarouselSlide, Typography, etc.) in project/design-system/. Results have excess whitespace, inconsistent styling, and don't match brand guidelines.
+
+**Root cause:** No JSX transform in container — coder can't import and render React components directly. Agent writes raw HTML + inline styles, ignoring the design system entirely.
+
+**Current behavior:** Coder receives render brief, writes standalone HTML with Playwright screenshot. Output is functional but visually inconsistent — each render is a one-off.
+
+**Desired behavior:** Coder uses design system tokens (colors, spacing, typography) at minimum. Ideally renders design system components via a build step or pre-compiled bundle.
+
+**Options:**
+1. Pre-bundle design system components into a single JS file coder can `<script>` include
+2. Inject tokens.css and component templates into coder's prompt context
+3. Add esbuild/swc JSX transform to coder container
+4. Accept inline HTML but enforce token usage via jidoka validation
+
+---
+
+## OPEN: Mid-run jidoka should escalate, not just warn
+
+**Status:** Open
+**Severity:** High — agents waste turns without correction
+
+**Problem:** Mid-run tool check (every 10 turns) only logs warnings when required tools haven't been called. Agent continues uncorrected, potentially consuming all maxTurns producing nothing useful.
+
+**Current behavior:** `checkMidRunTools` returns warnings, server.ts logs them. Agent keeps running.
+
+**Desired behavior:** Escalation options at configurable thresholds:
+1. Inject correction prompt into conversation ("You must use record_finding before continuing")
+2. Abort run early if threshold exceeded (e.g., 50% of maxTurns with no required tool calls)
+3. Both — inject correction first, abort if still no compliance after N more turns
+
+**Blocked by:** Pi SDK may not support injecting messages mid-run. Need to investigate whether session.prompt() can be called during an active run, or if AbortController + re-prompt is the only path.
+
+---
+
+## OPEN: No resilience layer for malformed or non-200 LLM responses
+
+**Status:** Open — monitor frequency before investing
+**Severity:** Medium
+
+**Problem:** When LLM providers return non-200 responses (429, 502, 503) or malformed output (truncated JSON, text instead of tool calls), the only handling is inside the Pi SDK's retry logic — which itself has bugs (see planner SDK crash issue above). No intermediate layer normalizes responses before they reach the agent loop.
+
+**Impact:** Transient provider errors propagate into SDK state corruption. Each new failure mode requires a new server.ts workaround.
+
+**Potential fix:** LLM API proxy between agents and providers — retries transient errors, normalizes responses, handles rate-limit backoff. All agents benefit from one layer. Also where you'd catch malformed JSON, truncated responses, parallel tool calling mismatches across models.
+
+**Decision:** Monitor. If SDK crash or similar failures recur across multiple E2E runs, build the proxy. Current server-level retry is sufficient mitigation for now.
+
+---
+
 ## OPEN: V4 Pro unsuitable as default agentic model
 
 **Status:** Open
@@ -155,6 +259,12 @@
 - write_artifact extension: added `file_path` parameter for binary files (images, PDFs). Agents render to disk then publish by path, solving the binary truncation bug.
 - Postgres artifact_type constraint: added `image`, `render`, `document`, `package` types.
 - E2E-51: 13/13 passing — coder renders 1080×1350 PNG, binary artifact replicates at full size.
+
+**What changed (2026-06-09 night):**
+- Postgres artifact_type constraint: added `manifest` type.
+- Data workproduct extension: `dataset_ref` type normalized to `dataset` at source (was sending raw "dataset_ref" which violated constraint).
+- Artifact service routes.ts: type normalization safety net on ingest — aliases (`dataset_ref` → `dataset`, `query_result` → `dataset`) and fallback to `document` for unknown types.
+- Replicator stays a dumb pipe — no type knowledge, passes artifact_type through untouched.
 
 **Remaining work:**
 - Session directory cleanup (TTL-based, post-replication)

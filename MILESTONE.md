@@ -23,8 +23,8 @@ Same brief as M0 but with every subsystem wired correctly. The goal is proving a
 
 ### What's NOT done
 
-- Programmatic output validation (jidoka hooks) — no automated quality gates on agent output
-- Data agent proper implementation — container exists but agent lacks meaningful ETL/analysis capability
+- Mid-run jidoka escalation — currently warns but doesn't abort or inject correction
+- Researcher parallel tool fanout — deep_research + Apify + web_search concurrently
 
 ### Success criteria
 
@@ -38,8 +38,10 @@ Same brief as M0 but with every subsystem wired correctly. The goal is proving a
 - [x] Artifacts stored via artifact service with artifact:// URIs
 - [x] Full agent turn traces visible in OpenObserve (LLM calls, tool executions, timing)
 - [ ] No manual intervention beyond initial prompt
-- [ ] Programmatic output validation (jidoka hooks)
-- [ ] Data agent functional for ETL/analysis tasks
+- [x] Programmatic output validation (jidoka.ts — zero-output, required tools, max turns, mid-run warnings)
+- [x] Data agent functional (DuckDB SQL, record_query_result, record_metric, record_chart, record_dataset_ref)
+- [x] Session isolation (per-invocation /workspace/sessions/{id}/, E2E-35 11/11)
+- [x] Artifact replication (fs.watch + .meta.json sidecar convention, agent-complete gate)
 
 ---
 
@@ -60,38 +62,23 @@ Completed as part of M0.1 infrastructure work. Spec: `tasks/specs/artifact-store
 
 ---
 
-## M1.5: Artifact Lineage — Query Layer and UI
+## M1.5: Artifact Lineage — Query Layer and UI — COMPLETE
 
 Track full dependency chains across agent-produced artifacts. Which agent created what, what inputs fed each output, how documents derive from source data. Lineage captured implicitly via read/write tracking in the artifact client — zero changes to agent prompts.
 
-Spec: `tasks/specs/artifact-lineage-service.md`
-
-### Phases
-
-**Phase 1: Schema + Capture** — artifact_edges table, client-side read tracking, server-side edge creation on write. This is the foundation — once edges exist, everything else is queryable.
-
-**Phase 2: Query API** — GET /lineage/:id (ancestors/descendants with depth), GET /lineage/graph?run_id=X (full graph as nodes+edges), PROV-JSON output format.
-
-**Phase 3: UI** — React Flow + dagre DAG visualization. Color-coded nodes by artifact type, click-to-inspect detail panel, filter by run/agent/type.
+Spec: `tasks/specs/artifact-lineage-service.md` | Plan: `tasks/plans/artifact-lineage-service.md`
 
 ### Success criteria
 
-- [ ] artifact_edges table stores derivation relationships between artifacts
-- [ ] Lineage captured automatically when agents read then write artifacts (no agent prompt changes)
-- [ ] GET /lineage/:id returns ancestor/descendant chain with configurable depth
-- [ ] GET /lineage/graph?run_id=X returns full graph for a planner run
-- [ ] React Flow UI renders lineage DAG with interactive node inspection
-- [ ] E2E: planner → researcher → writer pipeline produces correct lineage without any agent changes
-- [ ] Existing e2e tests (artifact-lineage.mjs, artifact-lineage-html.mjs) unbroken
+- [x] artifact_edges table stores derivation relationships between artifacts
+- [x] Lineage captured automatically when agents read then write artifacts (no agent prompt changes)
+- [x] GET /lineage/:id returns ancestor/descendant chain with configurable depth
+- [x] GET /lineage/graph?run_id=X returns full graph for a planner run (+ PROV-JSON format)
+- [x] React Flow UI renders lineage DAG with interactive node inspection (at /ui/)
+- [x] E2E-40: 25 tests covering all lineage endpoints, graph queries, PROV-JSON, trace
+- [x] Existing e2e tests (artifact-lineage.mjs, artifact-lineage-html.mjs) unbroken
 
-### Dependencies
-
-- M1 (artifact store v2) — complete
-- No dependency on jidoka hooks or data agent
-
-### Status
-
-Spec written. Not started.
+Completed 2026-06-09.
 
 ---
 
@@ -126,7 +113,7 @@ Full research task across X/Twitter, LinkedIn, YouTube, Bluesky, Threads. Four d
 
 ### Blockers
 
-No longer blocked on M1 (done). Blocked on: jidoka hooks (output reliability), data agent implementation (analysis capability), researcher parallel tool fanout (research quality).
+No longer blocked on M1 (done). Blocked on: researcher parallel tool fanout (research quality).
 
 ### Status
 
@@ -150,7 +137,7 @@ Recurring agent-driven intelligence system tracking the LLM/AI model landscape. 
 
 ### Blockers
 
-No longer blocked on M1 (done). Blocked on: jidoka hooks (reliability for recurring output), data agent implementation (automated tracking), researcher parallel tool fanout (multi-source intelligence gathering).
+No longer blocked on M1 (done). Blocked on: researcher parallel tool fanout (multi-source intelligence gathering).
 
 ### Status
 
@@ -173,7 +160,7 @@ Two-phase research: Phase 1 wide survey of faceless YouTube channels across 8 ni
 
 ### Blockers
 
-No longer blocked on M1 (done). Blocked on: jidoka hooks (reliability), data agent implementation (YouTube Data API tooling, automated scraping at scale), researcher parallel tool fanout (multi-niche concurrent research).
+No longer blocked on M1 (done). Blocked on: researcher parallel tool fanout (multi-niche concurrent research).
 
 ### Status
 

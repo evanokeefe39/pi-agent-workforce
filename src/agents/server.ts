@@ -4,9 +4,18 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { createLogger } from "./logger.mjs";
 import {
   createAgentSessionServices,
-  createAgentSessionFromServices,
+  createAgentSession,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import { init as initReplicator, startWatcher, waitForSession, getStatus as getReplicatorStatus } from "./replicator.js";
+import { createArtifactStore } from "./artifact-store.js";
+import {
+  type ValidationConfig,
+  type UsageRecord,
+  validateRun,
+  checkMidRunTools,
+  checkMaxTurns,
+} from "./jidoka.js";
 
 // --- Configuration ---
 
@@ -21,8 +30,12 @@ const BRIDGE_TIMEOUT_MS = parseInt(process.env.BRIDGE_TIMEOUT_MS || "120000", 10
 const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_SESSIONS || "3", 10);
 const QUEUE_MAX_DEPTH = parseInt(process.env.QUEUE_MAX_DEPTH || "8", 10);
 const MAX_BODY_BYTES = parseInt(process.env.MAX_BODY_BYTES || "1048576", 10);
-const VERSION = "5.0.0";
+const VERSION = "5.2.0";
+const SESSIONS_ROOT = "/workspace/sessions";
 const CWD = "/workspace/scratch";
+const REPLICATION_TIMEOUT_MS = parseInt(process.env.REPLICATION_TIMEOUT_MS || "10000", 10);
+const MAX_PROMPT_RETRIES = parseInt(process.env.MAX_PROMPT_RETRIES || "2", 10);
+const SDK_MESSAGE_ROLE_ERROR = /Cannot continue from message role/;
 
 const COST_REPORT_URL = process.env.COST_REPORT_URL || "";
 const COST_REPORT_KEY = process.env.COST_REPORT_KEY || "";
@@ -44,12 +57,6 @@ const SERVICE_NAME = `${AGENT_NAME}-server`;
 const logger = createLogger({ service: SERVICE_NAME });
 
 // --- Agent metadata ---
-
-interface ValidationConfig {
-  maxTurns: number;
-  requiredTools: string[];
-  requiredArtifactType: string;
-}
 
 let agentMeta = { name: AGENT_NAME, description: "", role: "", capabilities: "" };
 let validationConfig: ValidationConfig = { maxTurns: 0, requiredTools: [], requiredArtifactType: "" };
@@ -75,15 +82,6 @@ function log(level: string, event: string, data: Record<string, unknown> = {}) {
 }
 
 // --- Cost reporting ---
-
-interface UsageRecord {
-  inputTokens: number;
-  outputTokens: number;
-  cachedInputTokens: number;
-  provider: string;
-  model: string;
-  turns: number;
-}
 
 async function reportCostEvent(usage: UsageRecord) {
   if (!COST_REPORT_URL || !COST_REPORT_KEY || !WORKSPACE_ID || !AGENT_ID) return;
@@ -194,7 +192,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
     return;
   }
 
-  trackRun(traceId, { status: "running" });
+  trackRun(traceId, { status: "running", sessionDir: null });
 
   const ctx = body.context || {};
   const runId = body.runId || null;
@@ -212,16 +210,24 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
 
   const prompt = extractPrompt(body);
 
-  const rawScope = ctx.issueId || runId || "scratch";
-  const issueScope = rawScope.replace(/[^a-zA-Z0-9_-]/g, "-");
-  const workDir = body.workspace || `/workspace/${issueScope}`;
-  try { mkdirSync(workDir, { recursive: true }); } catch { /* non-fatal */ }
+  // Session-scoped working directory — each invocation gets its own sandbox
+  const sessionDir = `${SESSIONS_ROOT}/${traceId}`;
+  try {
+    mkdirSync(`${sessionDir}/workproduct`, { recursive: true });
+    mkdirSync(`${sessionDir}/output`, { recursive: true });
+    mkdirSync(`${sessionDir}/scratch`, { recursive: true });
+  } catch { /* non-fatal */ }
 
   let session: any;
   try {
-    const result = await createAgentSessionFromServices({
-      services,
-      sessionManager: SessionManager.inMemory(),
+    const result = await createAgentSession({
+      cwd: sessionDir,
+      agentDir: services.agentDir,
+      authStorage: services.authStorage,
+      settingsManager: services.settingsManager,
+      modelRegistry: services.modelRegistry,
+      resourceLoader: services.resourceLoader,
+      sessionManager: SessionManager.inMemory(sessionDir),
     });
     session = result.session;
   } catch (err: any) {
@@ -234,14 +240,15 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
   }
 
   const sessionId = session.sessionId;
-  log("info", "session_created", { session_id: sessionId, trace_id: traceId, correlation_id: body.correlationId || null });
+  trackRun(traceId, { sessionDir });
+  log("info", "session_created", { session_id: sessionId, session_dir: sessionDir, trace_id: traceId, correlation_id: body.correlationId || null });
 
   const usageByTurn: Array<{ provider: string; model: string; input: number; output: number; cacheRead: number }> = [];
   const toolCalls: Record<string, number> = {};
   let output = "";
   let eventCount = 0;
 
-  session.subscribe((event: any) => {
+  function handleSessionEvent(event: any) {
     eventCount++;
 
     if (event.type === "message_update") {
@@ -264,57 +271,116 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
       const turnCount = usageByTurn.length;
       trackRun(traceId, { turnCount });
 
-      if (validationConfig.maxTurns > 0 && turnCount >= validationConfig.maxTurns) {
-        log("error", "andon_max_turns", {
-          trace_id: traceId, turns: turnCount, limit: validationConfig.maxTurns,
-        });
+      const maxCheck = checkMaxTurns(validationConfig, turnCount);
+      if (!maxCheck.pass) {
+        log("error", "andon_max_turns", { trace_id: traceId, turns: turnCount, limit: validationConfig.maxTurns });
         abortController.abort();
       }
 
-      if (validationConfig.requiredTools.length > 0 && turnCount > 0 && turnCount % 10 === 0) {
-        const missing = validationConfig.requiredTools.filter(t => !toolCalls[t]);
-        if (missing.length > 0) {
-          log("warn", "andon_missing_tools", {
-            trace_id: traceId, turns: turnCount, missing, toolCalls,
+      const midCheck = checkMidRunTools(validationConfig, toolCalls, turnCount);
+      for (const w of midCheck.warnings) {
+        log("warn", "andon_missing_tools", { trace_id: traceId, turns: turnCount, detail: w, toolCalls });
+      }
+    }
+  }
+
+  session.subscribe(handleSessionEvent);
+  log("info", "prompt_sent", { prompt_length: prompt.length, trace_id: traceId });
+
+  let promptSuccess = false;
+
+  for (let attempt = 1; attempt <= MAX_PROMPT_RETRIES; attempt++) {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error("timeout")), BRIDGE_TIMEOUT_MS);
+      });
+      const cancelPromise = new Promise<never>((_, reject) => {
+        if (abortController.signal.aborted) return reject(new Error("cancelled"));
+        abortController.signal.addEventListener("abort", () =>
+          reject(new Error("cancelled")), { once: true }
+        );
+      });
+
+      await Promise.race([session.prompt(prompt), timeoutPromise, cancelPromise]);
+      clearTimeout(timeoutId);
+      promptSuccess = true;
+      break;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      const isTimeout = err.message === "timeout";
+      const isCancelled = err.message === "cancelled";
+      const isSdkMessageBug = SDK_MESSAGE_ROLE_ERROR.test(err.message);
+
+      if (isTimeout || isCancelled || !isSdkMessageBug) {
+        metrics.requests_failed++;
+        log(isCancelled ? "info" : "error", "prompt_failed", { error: err.message, trace_id: traceId });
+        trackRun(traceId, {
+          status: isCancelled ? "cancelled" : isTimeout ? "timeout" : "failed",
+          completedAt: new Date().toISOString(),
+          error: err.message,
+        });
+        activeAborts.delete(traceId);
+        metrics.requests_active--;
+        releaseSlot();
+        return;
+      }
+
+      log("warn", "sdk_message_role_error", {
+        trace_id: traceId, attempt, output_length: output.length, turns: usageByTurn.length, error: err.message,
+      });
+
+      if (output.length > 0) {
+        log("info", "degraded_success", {
+          trace_id: traceId, output_length: output.length, turns: usageByTurn.length,
+          detail: "subagents completed, planner crashed on continuation — returning captured output",
+        });
+        promptSuccess = true;
+        break;
+      }
+
+      if (attempt < MAX_PROMPT_RETRIES) {
+        log("info", "prompt_retry", { trace_id: traceId, next_attempt: attempt + 1 });
+        try {
+          const retryResult = await createAgentSession({
+            cwd: sessionDir,
+            agentDir: services.agentDir,
+            authStorage: services.authStorage,
+            settingsManager: services.settingsManager,
+            modelRegistry: services.modelRegistry,
+            resourceLoader: services.resourceLoader,
+            sessionManager: SessionManager.inMemory(sessionDir),
           });
+          session = retryResult.session;
+          session.subscribe(handleSessionEvent);
+        } catch (sessionErr: any) {
+          log("error", "retry_session_failed", { trace_id: traceId, error: sessionErr.message });
+          metrics.requests_failed++;
+          trackRun(traceId, {
+            status: "failed", completedAt: new Date().toISOString(),
+            error: `retry session failed: ${sessionErr.message} (original: ${err.message})`,
+          });
+          activeAborts.delete(traceId);
+          metrics.requests_active--;
+          releaseSlot();
+          return;
         }
       }
     }
-  });
+  }
 
-  log("info", "prompt_sent", { prompt_length: prompt.length, trace_id: traceId });
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error("timeout")), BRIDGE_TIMEOUT_MS);
-    });
-    const cancelPromise = new Promise<never>((_, reject) => {
-      if (abortController.signal.aborted) return reject(new Error("cancelled"));
-      abortController.signal.addEventListener("abort", () =>
-        reject(new Error("cancelled")), { once: true }
-      );
-    });
-
-    await Promise.race([session.prompt(prompt), timeoutPromise, cancelPromise]);
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    const isTimeout = err.message === "timeout";
-    const isCancelled = err.message === "cancelled";
+  if (!promptSuccess) {
     metrics.requests_failed++;
-    log(isCancelled ? "info" : "error", "prompt_failed", { error: err.message, trace_id: traceId });
+    log("error", "prompt_retries_exhausted", { trace_id: traceId, attempts: MAX_PROMPT_RETRIES });
     trackRun(traceId, {
-      status: isCancelled ? "cancelled" : isTimeout ? "timeout" : "failed",
-      completedAt: new Date().toISOString(),
-      error: err.message,
+      status: "failed", completedAt: new Date().toISOString(),
+      error: `SDK message role error after ${MAX_PROMPT_RETRIES} attempts`,
     });
     activeAborts.delete(traceId);
     metrics.requests_active--;
     releaseSlot();
     return;
   }
-
-  clearTimeout(timeoutId);
   activeAborts.delete(traceId);
 
   const totalDuration = Date.now() - requestStart;
@@ -341,62 +407,33 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
 
   reportCostEvent(usage).catch(() => {});
 
-  // Jidoka: zero-output detection
-  if (usage.outputTokens === 0) {
-    log("error", "andon_zero_output", {
-      trace_id: traceId, model: usage.model, provider: usage.provider, turns: usage.turns,
-    });
+  // Jidoka: post-run validation (zero output + required tools)
+  const validation = validateRun(validationConfig, toolCalls, usage);
+  if (!validation.pass) {
+    for (const err of validation.errors) {
+      log("error", "andon_validation_failed", { trace_id: traceId, error: err, toolCalls, turns: usage.turns });
+    }
     trackRun(traceId, {
       status: "failed", completedAt: new Date().toISOString(), output,
-      usage, sessionId, error: "zero output tokens — model returned empty response",
+      usage, sessionId, error: validation.errors.join("; "),
     });
     releaseSlot();
     return;
   }
 
-  // Jidoka: required tool check (post-run)
-  if (validationConfig.requiredTools.length > 0) {
-    const missing = validationConfig.requiredTools.filter(t => !toolCalls[t]);
-    if (missing.length > 0) {
-      log("error", "andon_required_tools_missing", {
-        trace_id: traceId, missing, toolCalls, turns: usage.turns,
-      });
-      trackRun(traceId, {
-        status: "failed", completedAt: new Date().toISOString(), output,
-        usage, sessionId,
-        error: `required tools never called: ${missing.join(", ")}`,
-      });
-      releaseSlot();
-      return;
-    }
-  }
-
-  // Jidoka: required artifact type check (post-run)
-  if (validationConfig.requiredArtifactType && ARTIFACT_SERVICE_URL) {
-    try {
-      const resp = await fetch(
-        `${ARTIFACT_SERVICE_URL}/artifacts?run_id=${sessionId}&artifact_type=${validationConfig.requiredArtifactType}&limit=1`,
-        { headers: { "x-agent-name": AGENT_NAME } }
-      );
-      if (resp.ok) {
-        const arts = await resp.json() as any[];
-        if (arts.length === 0) {
-          log("error", "andon_missing_artifact", {
-            trace_id: traceId, required_type: validationConfig.requiredArtifactType,
-            session_id: sessionId, turns: usage.turns,
-          });
-          trackRun(traceId, {
-            status: "failed", completedAt: new Date().toISOString(), output,
-            usage, sessionId,
-            error: `no ${validationConfig.requiredArtifactType} artifact produced`,
-          });
-          releaseSlot();
-          return;
-        }
-      }
-    } catch (err: any) {
-      log("warn", "artifact_check_failed", { error: err.message, trace_id: traceId });
-    }
+  // Agent-complete gate: wait for file replication before marking done
+  const repl = await waitForSession(sessionDir, REPLICATION_TIMEOUT_MS);
+  if (!repl.ok) {
+    log("error", "andon_replication_incomplete", {
+      trace_id: traceId, outstanding: repl.outstanding, session_dir: sessionDir,
+    });
+    trackRun(traceId, {
+      status: "failed", completedAt: new Date().toISOString(), output,
+      usage, sessionId,
+      error: `replication incomplete: ${repl.outstanding} files not synced to storage`,
+    });
+    releaseSlot();
+    return;
   }
 
   trackRun(traceId, { status: "completed", completedAt: new Date().toISOString(), output, usage, sessionId });
@@ -603,6 +640,10 @@ const start = async () => {
   }
 
   const extCount = services.resourceLoader.getExtensions().extensions.length;
+
+  initReplicator(createArtifactStore(), log);
+  startWatcher();
+
   log("info", "ready", { startup_ms: Date.now() - bootTime, agent_name: AGENT_NAME, extensions: extCount });
 
   await app.listen({ port: PORT, host: "0.0.0.0" });

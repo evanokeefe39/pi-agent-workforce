@@ -61,3 +61,55 @@ export interface ErrorResponse {
   error: string;
   status: number;
 }
+
+// ---------------------------------------------------------------------------
+// Lineage
+// ---------------------------------------------------------------------------
+
+export type EdgeType =
+  | "derived_from"
+  | "informed_by"
+  | "cites"
+  | "contains"
+  | "references"
+  | "extracted_from";
+
+export interface EdgeRecord {
+  source_id: string;
+  target_id: string;
+  edge_type: EdgeType;
+  metadata: Record<string, unknown>;
+  created_at: Date;
+}
+
+export interface EdgeInsert {
+  source_id: string;
+  target_id: string;
+  edge_type: EdgeType;
+  metadata?: Record<string, unknown>;
+}
+
+export interface LineageNode {
+  id: string;
+  agent_name: string;
+  artifact_type: string;
+  filename: string;
+  depth: number;
+  edge_type: EdgeType;
+}
+
+export interface GraphResponse {
+  nodes: Array<{
+    id: string;
+    agent_name: string;
+    artifact_type: string;
+    filename: string;
+    run_id: string | null;
+    created_at: Date;
+  }>;
+  edges: Array<{
+    source: string;
+    target: string;
+    type: EdgeType;
+  }>;
+}

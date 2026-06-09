@@ -328,20 +328,20 @@ THEN lineage is captured for all artifacts produced
 
 ## Definition of Done
 
-- [ ] artifact_edges table created via migration script
-- [ ] client.ts tracks reads per run_id and attaches lineage.inputs on write
-- [ ] routes.ts creates edges on artifact write when lineage.inputs present
-- [ ] GET /lineage/:id returns ancestors/descendants with depth control
-- [ ] GET /lineage/graph?run_id=X returns full graph as nodes+edges
-- [ ] PROV-JSON output supported via format parameter
-- [ ] React Flow UI renders lineage DAG with color-coded nodes
-- [ ] UI supports click-to-inspect, filter by run_id/agent/type, zoom/pan
-- [ ] E2E test: planner → researcher → writer pipeline produces correct lineage graph
-- [ ] Existing artifact-lineage.mjs/html tests still work (backward compat)
-- [ ] No changes to any agent AGENTS.md files
-- [ ] Reasoning trace written
-- [ ] Assumption log written
-- [ ] Plan in tasks/plans/ updated with all items marked complete
+- [x] artifact_edges table created via migration script
+- [x] client.ts tracks reads and attaches lineage.inputs on write
+- [x] routes.ts creates edges on artifact write when lineage.inputs present
+- [x] GET /lineage/:id returns ancestors/descendants with depth control
+- [x] GET /lineage/graph?run_id=X returns full graph as nodes+edges
+- [x] PROV-JSON output supported via format parameter
+- [x] React Flow UI renders lineage DAG with color-coded nodes
+- [x] UI supports click-to-inspect, filter by run_id/agent/type, zoom/pan
+- [x] E2E test: e2e-40-lineage-service.mjs validates all endpoints
+- [x] Existing artifact-lineage.mjs/html tests unmodified (backward compat)
+- [x] No changes to any agent AGENTS.md files
+- [x] Reasoning trace written
+- [x] Assumption log written
+- [x] Plan in tasks/plans/ updated with all items marked complete
 
 ## Negative Space
 

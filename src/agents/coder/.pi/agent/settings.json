@@ -20,7 +20,7 @@
   },
   "otel": {
     "enabled": true,
-    "endpoint": "http://openobserve:5080/api/default",
+    "endpoint": "http://otel-collector:4318",
     "protocol": "http",
     "serviceName": "coder-agent",
     "captureContent": "metadata_only",

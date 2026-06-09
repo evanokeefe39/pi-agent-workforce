@@ -3,6 +3,38 @@ import { createHash } from "node:crypto";
 const AGENT_NAME = process.env.AGENT_NAME || "unknown";
 const SERVICE_URL = process.env.ARTIFACT_SERVICE_URL || "";
 
+// ---------------------------------------------------------------------------
+// Lineage: read tracking + method inference
+// ---------------------------------------------------------------------------
+
+// Flat set — all artifact IDs read during this container's lifetime.
+// Scoped per container (one agent per container), consumed on every write.
+const readLog: Set<string> = new Set();
+
+function trackRead(artifactId: string): void {
+  readLog.add(artifactId);
+}
+
+function getInputs(): string[] {
+  return Array.from(readLog);
+}
+
+const METHOD_MAP: Record<string, string> = {
+  research: "collection",
+  finding: "collection",
+  dataset: "collection",
+  report: "synthesis",
+  brief: "synthesis",
+  code: "transformation",
+  state: "system",
+  session: "system",
+  log: "system",
+};
+
+function inferMethod(artifactType: string): string {
+  return METHOD_MAP[artifactType] ?? "unknown";
+}
+
 export interface ArtifactRecord {
   id: string;
   filename: string;
@@ -86,13 +118,16 @@ export async function write(params: WriteParams): Promise<WriteResult> {
     );
   }
 
+  const inputs = getInputs();
+  const lineage = { inputs, method: inferMethod(params.type) };
+
   const body = {
     filename: params.filename,
     content: encoded,
     type: params.type,
     bucket: params.bucket,
     mime: params.mime,
-    metadata: { ...params.metadata, _client_hash: localHash, _client_size: localSize },
+    metadata: { ...params.metadata, _client_hash: localHash, _client_size: localSize, lineage },
     run_id: params.run_id,
     workspace: params.workspace,
   };
@@ -195,6 +230,8 @@ export async function read(id: string): Promise<ReadResult> {
       `artifact integrity: read hash mismatch for ${id} — stored=${metadata.content_hash} read=${readHash}. Content corrupted in storage or transit.`
     );
   }
+
+  trackRead(metadata.id);
 
   return { content, metadata };
 }
