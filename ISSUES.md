@@ -73,29 +73,25 @@
 
 ---
 
-## OPEN: Agents need hardening with jidoka/hooks for mid-run validation
+## PARTIALLY RESOLVED: Agents need hardening with jidoka/hooks for mid-run validation
 
-**Status:** Open
+**Status:** Partially resolved
 **Severity:** High
 
-**Problem:** When a model provider removes models or goes down, agents silently return empty responses. No error, no fallback, no alert. The Pi SDK treats a 0-token completion as success. Beyond provider failures, agents can also silently produce wrong-format output for many turns without any programmatic check.
+**What changed (2026-06-09):**
+- `jidoka.ts` extracted as pure validation module: `validateZeroOutput`, `validateRequiredTools`, `checkMidRunTools`, `checkMaxTurns`, `validateRun`
+- Zero-output detection: 0 output tokens = failed, not completed
+- Turn breaker: abort at maxTurns via AbortController
+- Mid-run tool warnings: every 10 turns, logs if required tools not yet called
+- Post-run required tools check: run fails if specified tools never called
+- All validation config driven by `agent.json runtimeConfig.validation`
+- E2E-32 validates this behavior (11/11 passing)
 
-**This ties to Toyota Production System principles:**
-- **Jidoka** (autonomation): detect abnormality, stop the line, fix, resume. Agents should detect mid-run that output format is wrong and self-correct.
-- **Andon cord**: programmatic signal that something is wrong (0-token completion, N turns without expected artifact, output format mismatch).
-- **Poka-yoke**: make it impossible to produce wrong output (hooks that validate each turn's output against expected schema).
-
-**Failure modes observed:**
-1. Provider removes model (Cerebras dropped Qwen3 32B) -> Pi SDK returns empty completion -> server reports "completed" with 0 output -> tests pass
-2. Model ignores structured output format (V4 Pro, 42 turns, 0 findings) -> no mid-run detection
-3. API key expires -> silent empty response
-4. Rate limiting -> unknown behavior, may silently degrade
-
-**Hardening needed:**
-- **server.mjs:** Detect 0-token completions and treat as failure. Log clear error on 0 output tokens. Report actual model used from API response, not configured model.
-- **Mid-run hooks:** After every N turns, validate that expected artifacts exist. If researcher has run 10 turns with 0 `record_finding` calls, raise andon. If writer has run 15 turns with no section output, raise andon.
-- **Tests:** E2E tests should check output length as baseline assertion (output > 100 chars). Add model smoke test before full suite. Test fallback chain behavior.
-- **Monitoring:** Alert on 0 output token completions via OpenObserve/OTLP. Track model identity per request from API response.
+**Remaining work:**
+- Mid-run tool check should escalate (inject correction prompt or abort), not just warn
+- Model identity reporting from API response (currently logs configured model, not actual)
+- OpenObserve alerting on 0-output completions
+- Fallback chain testing when provider goes down
 
 ---
 
@@ -138,35 +134,82 @@
 
 ---
 
-## OPEN: Session isolation and artifact replication architecture
+## PARTIALLY RESOLVED: Session isolation and artifact replication architecture
 
-**Status:** Open — architectural change
+**Status:** Core implementation done, tested. Remaining: session cleanup, docker-compose sysctls.
 **Severity:** High
 
-**Problem:** All concurrent sessions share `/workspace/scratch`. server.ts computes a per-invocation `workDir` (line 217) but never passes it to the Pi session or extensions. Workproduct extensions use `process.cwd()` directly, so concurrent sessions write to the same directory. This is a session scoping bug confirmed by industry research — LangGraph has a documented cross-thread contamination bug (langchain-ai/langgraphjs#2040) from the same pattern.
+**What changed (2026-06-09):**
+- server.ts creates `/workspace/sessions/{traceId}/` per invocation with `output/`, `workproduct/`, `scratch/` subdirs
+- server.ts calls `createAgentSession` (not `createAgentSessionFromServices`) with `cwd: sessionDir` — all Pi SDK tools (bash, read, write) operate in session dir
+- `jidoka.ts` — pure validation functions extracted from server.ts
+- `replicator.ts` — fs.watch on `/workspace/sessions/` for `.meta.json` files, uploads paired artifact via ArtifactStore interface
+- `artifact-store.ts` — ArtifactStore interface + HttpArtifactStore calling artifact service REST API
+- Extensions (`write_artifact`, `record_query_result`, etc.) write `.meta.json` sidecars + append to `provenance.jsonl`
+- Agent-complete gate: waits for all sidecars to replicate before marking run done
+- E2E-35: 11 tests covering session dirs, concurrent isolation, replication, sidecar writes, dir structure
 
-**Design decisions (agreed):**
+**Key finding:** Spec's "Resolved Question 1" was wrong — `createAgentSessionFromServices` hardcodes `services.cwd`, so `SessionManager.inMemory(sessionDir)` alone doesn't propagate cwd to tools. Fix: call `createAgentSession` directly with `cwd: sessionDir`.
 
-1. **Session-scoped directories.** Each invocation gets `/workspace/sessions/{session_id}/` as its working directory. All tools write within it. Convention: `workproduct/{type}/{ulid}_{name}.{ext}` for outputs, `scratch/` for temp files.
+**What changed (2026-06-09 afternoon):**
+- write_artifact extension: added `file_path` parameter for binary files (images, PDFs). Agents render to disk then publish by path, solving the binary truncation bug.
+- Postgres artifact_type constraint: added `image`, `render`, `document`, `package` types.
+- E2E-51: 13/13 passing — coder renders 1080×1350 PNG, binary artifact replicates at full size.
 
-2. **Metadata at write time, not publish time.** Workproduct tools write a `.meta.json` sidecar alongside each file when it's created locally. Contains artifact type, agent name, session ID, lineage inputs, provenance chain. No delayed "publish" step.
+**Remaining work:**
+- Session directory cleanup (TTL-based, post-replication)
+- Docker-compose sysctls for inotify limits (`fs.inotify.max_user_watches`, `fs.inotify.max_user_instances`)
+- Verify replication under high file volume (current testing: 2-5 files per session)
 
-3. **Triggered replication to object storage.** A sync layer replicates session directories to MinIO, excluding `scratch/`. Replication is event-triggered (inotify/fswatch), not polling. Files appear in S3 as they're written.
+---
 
-4. **Agent-complete gate.** On session completion, a hook checks whether any file replication is still outstanding. If pending, waits with timeout. If timeout expires, marks run as failed with error or suggests planner wait and retry.
+## FEATURE: Publisher agent — full specification and deployment
 
-5. **Artifact service role changes.** Becomes a read/query/index layer over what's in S3, not a write endpoint. Still needed for: user uploads (files attached to prompts), cross-agent discovery (query by type/agent/run_id/tags), lineage graph queries.
+**Status:** Implemented, tested (E2E-50 C1–C8)
+**Priority:** High
+**Spec:** `tasks/specs/publisher-agent.md`
 
-6. **Provenance manifest.** Each session has `provenance.jsonl` at session root. Workproduct tools append lineage entries as they run. Replicated to S3 like any other file. Artifact service indexes it for lineage graph queries.
+**What shipped:** AGENTS.md rewritten to 136 lines with 6-phase pipeline (RECEIVE → ASSEMBLE → CHECKLIST → STAGE → PUBLISH → TRACK), 3 operating modes, rendering delegation protocol with render brief schema, HITL gating. docker-compose :8085, RBAC, planner subagent config. agent.json capabilities updated.
 
-**Affected components:**
-- `src/agents/server.ts` — pass session-scoped workDir to session creation
-- `src/agents/extensions/*/workproduct.ts` — write to session dir, write .meta.json sidecars, append to provenance.jsonl
-- `src/agents/extensions/artifacts/index.ts` — write_artifact becomes local-fs write + metadata, not HTTP POST
-- `src/artifact-service/` — new sync/replication layer, shift to read/query role
-- All agent containers — volume mount strategy for sessions
+---
 
-**Industry precedent:** AWS Bedrock AgentCore managed session storage, Azure Foundry hosted agent persistent $HOME, Kubernetes Agent Sandbox PVC-per-session pattern.
+## FEATURE: Shared skills infrastructure
+
+**Status:** Implemented, tested (E2E-50 A1–A6)
+**Priority:** High
+**Spec:** `tasks/specs/shared-skills-infrastructure.md`
+
+**What shipped:** `src/agents/skills/` with brand-guidelines (color palette, typography, voice/tone, visual identity, anti-patterns) and platform-formats (dimensions, safe zones, render brief schema). Dockerfile COPY into publisher, coder, qa targets.
+
+---
+
+## FEATURE: Project workspace — persistent versioned asset storage
+
+**Status:** Implemented, tested (E2E-50 B1–B5)
+**Priority:** Medium
+**Spec:** `tasks/specs/project-workspace.md`
+
+**What shipped:** `project/` directory with design-system, brand, templates, reference, archive subdirs. README.md. docker-compose read-only bind mount on publisher, coder, data services.
+
+---
+
+## FEATURE: Planner routing hints — rendering delegation and publisher integration
+
+**Status:** Implemented, tested (E2E-50 E1–E5)
+**Priority:** High
+**Spec:** `tasks/specs/planner-routing-hints.md`
+
+**What shipped:** Content Production Routing section in planner AGENTS.md with 6-entry chain table, rendering delegation pattern, multi-phase example. Publisher + coder added to subagent-http config.json.
+
+---
+
+## FEATURE: Coder agent — rendering capability
+
+**Status:** Implemented, tested (E2E-50 D1–D8)
+**Priority:** High
+**Spec:** `tasks/specs/coder-rendering-capability.md`
+
+**What shipped:** Coder AGENTS.md expanded to 88 lines with rendering workflow, render types table, design system reference. Dockerfile coder-deps stage (Chromium + React + Playwright). docker-compose :8086 with 4G memory. RBAC expanded. Shared skills COPY.
 
 ---
 

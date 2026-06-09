@@ -30,13 +30,18 @@ Delegation blocks until agent completes. Parallel via `tasks: [...]`. Session ID
 
 | File | What |
 |------|------|
-| `src/agents/server.ts` | Agent HTTP server (Bun, Fastify, Pi SDK, jidoka hooks) |
+| `src/agents/server.ts` | Agent HTTP server (Bun, Fastify, Pi SDK, jidoka, replicator) |
+| `src/agents/jidoka.ts` | Pure validation functions (zero-output, required tools, max turns) |
+| `src/agents/replicator.ts` | fs.watch on /workspace/sessions/, uploads .meta.json sidecars to MinIO |
+| `src/agents/artifact-store.ts` | ArtifactStore interface + HttpArtifactStore implementation |
 | `src/agents/logger.mjs` | Pino + OTel log shipping |
 | `src/agents/Dockerfile` | Multi-stage: node:22-slim + Bun, per-agent targets |
 | `src/agents/{name}/.pi/agent/` | Agent config: AGENTS.md (sys prompt), config.yml (models), settings.json |
 | `src/agents/{name}/agent.json` | Agent metadata + validation config (maxTurns, requiredTools) |
 | `src/agents/extensions/` | Pi extensions: artifacts, web-search, web-scrape, deep-research, etc. |
-| `src/artifact-service/` | Bun artifact store (routes.ts, storage.ts, rbac.ts) |
+| `src/artifact-service/` | Bun artifact store (routes.ts, metastore.ts, graph.ts, rbac.ts) |
+| `src/artifact-service/graph.ts` | Graphology-based lineage graph (BFS trace, PROV-JSON export) |
+| `src/lineage-ui/` | React + @xyflow/react lineage visualization (served at /ui/) |
 | `docs/model-selection.md` | Model decisions, provider catalog, cost analysis |
 | `tasks/lessons.md` | Patterns from corrections — read before starting work |
 | `ISSUES.md` | Open issues, resolved issues collapsed at bottom |
@@ -46,27 +51,37 @@ Delegation blocks until agent completes. Parallel via `tasks: [...]`. Session ID
 
 All agents: DeepSeek V4 Flash ($0.10/M). V4 Pro demoted to plan/review fallback only (ignored structured output, caused timeouts). See `docs/model-selection.md` for full rationale.
 
+## Session isolation
+
+Each invocation gets `/workspace/sessions/{traceId}/` with `output/`, `workproduct/`, `scratch/` subdirs. server.ts calls `createAgentSession` (not `createAgentSessionFromServices`) with `cwd: sessionDir` so all Pi SDK tools (bash, read, write, edit) operate in the session dir. Extensions write `.meta.json` sidecars alongside files. Replicator (`replicator.ts`) watches for sidecars via `fs.watch` and uploads to MinIO. Agent-complete gate waits for replication before marking run done.
+
 ## Jidoka (output validation)
 
-server.ts enforces output quality via `agent.json runtimeConfig.validation`:
+`jidoka.ts` — pure validation functions, no I/O. server.ts calls after run completes:
 - **Zero-output:** 0 tokens = failed, not completed
 - **Turn breaker:** abort at maxTurns (researcher 60, writer 50)
 - **Required tools:** post-run check that specified tools were called
-- **Required artifact:** post-run check that artifact type exists in service
+- **Mid-run warning:** every 10 turns, log if required tools not yet called
 
 ## Ports
 
-Planner :8081, Researcher :8082, Data :8083, Writer :8084, Artifacts :8090, Postgres :5432, MinIO :9000/:9001, OpenObserve :5080
+Planner :8081, Researcher :8082, Data :8083, Writer :8084, Publisher :8085, Coder :8086, Artifacts :8090, Postgres :5432, MinIO :9000/:9001, OpenObserve :5080
 
 ## Running tests
 
 ```bash
-bash tests/e2e/e2e-32-model-and-output-validation.sh  # model + concurrency
+bash tests/e2e/e2e-32-model-and-output-validation.sh  # model + concurrency (11 tests)
+bash tests/e2e/e2e-35-session-isolation.sh             # session dirs, replication (11 tests)
+bash tests/e2e/e2e-34-data-agent-analysis.sh           # data agent workproduct tools
 bash tests/e2e/e2e-30-instagram-growth-research.sh     # full planner pipeline
+node tests/e2e/e2e-40-lineage-service.mjs --latest     # lineage API + graph (25 tests)
 node tests/e2e/artifact-lineage.mjs --latest           # ASCII lineage report
 node tests/e2e/artifact-lineage-html.mjs --latest      # HTML graph report
+bash tests/e2e/e2e-50-content-production-infra.sh      # shared skills, workspace, publisher, coder, routing (32 tests)
+bash tests/e2e/e2e-51-coder-rendering.sh               # coder toolchain, design system, live render, replication (13 tests)
+bash tests/e2e/e2e-52-content-production-pipeline.sh   # full Writer → Coder → Publisher chain via planner (10 tests)
 ```
 
 ## Workproduct standard
 
-Researcher produces structured findings via `record_finding` with ADMIRALTY grades (A-F reliability, 1-6 credibility). Published as JSONL via `write_artifact` type `dataset`. Writer consumes findings, uses grades for hedging. Data agent (WIP) will use Python + DuckDB for code-first analysis of scraped data.
+Researcher produces structured findings via `record_finding` with ADMIRALTY grades (A-F reliability, 1-6 credibility). Published as JSONL via `write_artifact` type `dataset`. Writer consumes findings, uses grades for hedging. Data agent uses DuckDB SQL for code-first analysis (`record_query_result`, `record_metric`, `record_chart`, `record_dataset_ref`). All workproduct tools write `.meta.json` sidecars for automatic replication.

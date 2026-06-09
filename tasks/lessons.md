@@ -119,9 +119,36 @@
 
 ---
 
+## Pi SDK `createAgentSessionFromServices` hardcodes services.cwd — per-session cwd requires `createAgentSession`
+
+**Date:** 2026-06-09
+**Trigger:** Session isolation spec claimed `SessionManager.inMemory(sessionDir)` would propagate cwd to all tools. Test showed agents still working in `/workspace/scratch`. Root cause: `createAgentSessionFromServices` passes `options.services.cwd` to `createAgentSession`, which overrides `sessionManager.getCwd()`. The services cwd was set once at boot to `/workspace/scratch`.
+**Rule:** `createAgentSessionFromServices` is a convenience wrapper that hardcodes `cwd: options.services.cwd`. To get per-session cwd, call `createAgentSession` directly with `cwd: sessionDir` while reusing all other services (agentDir, authStorage, settingsManager, modelRegistry, resourceLoader). The SDK resolves cwd as: `options.cwd ?? sessionManager.getCwd() ?? process.cwd()`. Only the first wins.
+**How to apply:** When sharing services across sessions but needing per-session directories (concurrency), never use `createAgentSessionFromServices`. Use `createAgentSession` with explicit cwd + reused services. Verify with a bash `pwd` test before trusting spec claims about SDK behavior.
+
+---
+
+## Spec claims about SDK internals must be verified by test, not code reading
+
+**Date:** 2026-06-09
+**Trigger:** Session isolation spec "Resolved Question 1" said cwd propagates from `SessionManager.inMemory(sessionDir)` to all tools, citing specific SDK source lines. The claim was wrong — `createAgentSessionFromServices` passes `services.cwd`, not `sessionManager.getCwd()`. The spec author read SDK source but missed the override in the wrapper function.
+**Rule:** When a spec claims behavior from a third-party SDK (especially "the fix is one line"), verify with a running test before implementing the full feature. A 30-second smoke test (invoke agent, check pwd output) would have caught this immediately. Code reading finds what CAN happen; testing finds what DOES happen.
+**How to apply:** For any spec that includes "Resolved Question" sections about SDK behavior, add a verification step to the implementation plan: "Run minimal smoke test confirming claimed behavior before building on it."
+
+---
+
 ## E2E tests must give goals, not imperative instructions
 
 **Date:** 2026-06-07
 **Trigger:** E2E-30 initial draft gave the researcher agent a numbered list of 8 research dimensions, told it which tools to use per dimension, and specified a minimum finding count. This defeats the purpose of testing agent coordination — we were testing whether the agent follows instructions, not whether it can plan and execute autonomously.
 **Rule:** When testing subagent coordination, the orchestrating prompt must be a goal brief: what outcome is needed and why, not how to get there. The agent decides its own plan, tool selection, and research structure. The test harness captures the plan the agent made and judges plan quality separately from output quality.
 **How to apply:** Before writing a pi_run prompt in an e2e test, check: does this prompt contain step numbers, tool names, or quantity targets? If yes, rewrite as a goal. Quantity expectations belong in test assertions, not in the prompt.
+
+---
+
+## Tool parameters for binary content must support file paths, not just strings
+
+**Date:** 2026-06-09
+**Trigger:** Coder agent rendered a 38KB PNG carousel slide correctly, then called write_artifact with the file path as the content string (not the actual binary data). The extension wrote the 29-byte path string as the artifact. write_artifact only accepted a `content: string` parameter — impossible to pass binary data through an LLM tool call string parameter.
+**Rule:** Any tool that agents use to publish files must support a `file_path` parameter alongside `content`. Agents render binary files to disk (via Playwright, ffmpeg, etc.) and cannot pass binary data through string parameters. The tool reads the file from disk when given a path.
+**How to apply:** When adding new write/publish tools to extensions, always include a file_path alternative. Check existing tools for the same gap — any tool that writes files and only accepts string content will break on binary output.
