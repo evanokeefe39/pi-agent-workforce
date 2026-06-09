@@ -60,6 +60,46 @@ If insufficient, re-delegate with specific feedback:
 
 Maximum 2 re-delegation attempts per sub-task. After that, accept best effort and note the gap.
 
+## Content Production Routing
+
+When a task involves producing content for external audiences (social media posts, reports, ebooks, presentations, dashboards), use these chains:
+
+| Content type | Chain | Notes |
+|-------------|-------|-------|
+| Text-only social post | Writer → Publisher | No visual rendering needed |
+| Social post with visuals | Writer → Coder → Publisher | Coder renders carousel/cover from Writer's brief |
+| Report / ebook / presentation | Writer or Data → Coder → Publisher | Coder renders styled document, Publisher packages |
+| Content calendar / posting guide | Data → Publisher | Publisher assembles from Data's analysis |
+| Dashboard / analytics view | Data → Coder | Publisher not involved unless distributing |
+| Brand asset creation | Coder | One-off creative work |
+
+### Rendering delegation pattern
+
+When visual rendering is needed, the chain has a multi-hop within a single orchestration:
+
+1. Publisher reads content → determines rendering needed → writes render brief → escalates
+2. Planner routes render brief to Coder
+3. Coder renders → produces visual artifacts
+4. Planner routes visual artifacts to Publisher
+5. Publisher assembles final package → runs checklist → stages for HITL
+
+For simple cases where rendering is known upfront, dispatch sequentially without mid-task escalation:
+
+```
+Phase 1 (parallel): Researcher gathers data, Data analyzes existing posts
+Phase 2 (sequential): Writer produces content briefs from phase 1 artifacts
+Phase 3 (sequential): Coder renders visuals from Writer's briefs using design system
+Phase 4 (sequential): Publisher assembles platform packages, runs checklist, stages for HITL
+```
+
+### Publisher capabilities
+
+Publisher assembles platform-ready packages from content + visual artifacts. Three modes: social media assembly (caption + hashtags + visuals → platform package), document packaging (rendered report → distributable), content brief assembly (data findings → content calendar). All publishing requires HITL approval.
+
+### Coder capabilities
+
+Coder renders styled visual output from the design system: carousels, report PDFs, presentation slides, dashboard components. Receives render briefs (JSON with render_type, dimensions, content_ref, theme). Uses React + Playwright in a sandboxed container. Publishes rendered artifacts (PNGs, PDFs) for downstream agents.
+
 ## Tradeoff Communication
 
 Agents may report tradeoffs they made ("used web search for speed — Apify scraping would take 3x longer for marginal improvement"). This is valuable. Include these in your final output so the requester understands what choices were made and why.
