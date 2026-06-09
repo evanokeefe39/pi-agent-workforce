@@ -2,13 +2,16 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { createHash } from "node:crypto";
 import * as client from "./client.js";
 
 const TEMPLATES_ROOT = "/root/.pi/agent/extensions/workproduct-lib/templates";
+const AGENT_NAME = process.env.AGENT_NAME || "unknown";
 
 const MIME_MAP: Record<string, string> = {
   md: "text/markdown",
   json: "application/json",
+  jsonl: "application/x-ndjson",
   csv: "text/csv",
   txt: "text/plain",
 };
@@ -27,6 +30,15 @@ function parseId(input: string): string {
   return input;
 }
 
+function generateId(): string {
+  try {
+    const mod = require("./workproduct-lib/ulid.js");
+    return mod.ulid();
+  } catch {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  }
+}
+
 export default function (pi: ExtensionAPI) {
   if (!client.getAgentName()) return;
 
@@ -35,39 +47,82 @@ export default function (pi: ExtensionAPI) {
     name: "write_artifact",
     label: "Write Artifact",
     description:
-      "Write a file to the artifact service so other agents can read it. Returns an artifact URI, ID, size, and hash.",
+      "Write a file to the session output directory. The file is automatically replicated to object storage for other agents to read. Returns an artifact ID, size, and hash.",
     promptSnippet:
       "When sharing work with other agents or referencing artifacts:\n" +
-      "- Write output using write_artifact. It returns an artifact reference (URI).\n" +
-      "- Pass that URI in task responses or handoff messages. Never paste artifact content inline.\n" +
-      "- To read another agent's work, call read_artifact with the URI you received.\n" +
-      "- To discover available artifacts, call list_artifacts with filters.\n" +
-      "- URIs look like: artifact://default/run123/researcher/research/01JHX_findings.md\n" +
-      "- The downstream agent resolves the URI when it needs the content.",
+      "- Write output using write_artifact. It returns an artifact ID.\n" +
+      "- For text files, pass content directly. For binary files (images, PDFs), save the file first then pass file_path.\n" +
+      "- Pass that ID in task responses or handoff messages. Never paste artifact content inline.\n" +
+      "- To read another agent's work, call read_artifact with the ID you received.\n" +
+      "- To discover available artifacts, call list_artifacts with filters.",
     parameters: Type.Object({
-      name: Type.String({ description: "Filename including extension, e.g. findings.md" }),
-      content: Type.String({ description: "File content to write" }),
-      type: Type.String({ description: "Artifact type, e.g. report, dataset, code, brief" }),
+      name: Type.String({ description: "Filename including extension, e.g. findings.jsonl" }),
+      content: Type.Optional(Type.String({ description: "File content to write (text). Omit if using file_path for binary files." })),
+      file_path: Type.Optional(Type.String({ description: "Path to an existing file to publish as artifact (use for binary files like images, PDFs). Relative to session dir or absolute." })),
+      type: Type.String({ description: "Artifact type, e.g. report, dataset, code, brief, image, render" }),
       template: Type.Optional(Type.String({ description: "Template name used to produce this artifact" })),
-      run_id: Type.Optional(Type.String({ description: "Run ID (auto-set from env if omitted)" })),
+      run_id: Type.Optional(Type.String({ description: "Run ID (auto-set from session if omitted)" })),
       workspace: Type.Optional(Type.String({ description: "Workspace name (auto-set from env if omitted)" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
+        if (!params.content && !params.file_path) {
+          return { content: [{ type: "text" as const, text: "Error: provide either content or file_path" }] };
+        }
+
         const sessionId = ctx?.sessionManager?.getSessionId?.() || "unknown";
-        const result = await client.write({
+        const cwd = ctx?.sessionManager?.getCwd?.() || process.cwd();
+        const outputDir = path.join(cwd, "output");
+        fs.mkdirSync(outputDir, { recursive: true });
+
+        const id = generateId();
+        const fullFilename = `${id}_${params.name}`;
+        const filePath = path.join(outputDir, fullFilename);
+
+        let contentBuf: Buffer;
+        if (params.file_path) {
+          const srcPath = path.isAbsolute(params.file_path)
+            ? params.file_path
+            : path.join(cwd, params.file_path);
+          if (!fs.existsSync(srcPath)) {
+            return { content: [{ type: "text" as const, text: `Error: file not found: ${srcPath}` }] };
+          }
+          contentBuf = fs.readFileSync(srcPath);
+          fs.copyFileSync(srcPath, filePath);
+        } else {
+          contentBuf = Buffer.from(params.content!, "utf-8");
+          fs.writeFileSync(filePath + ".tmp", params.content!);
+          fs.renameSync(filePath + ".tmp", filePath);
+        }
+
+        const hash = createHash("sha256").update(contentBuf).digest("hex");
+
+        // .meta.json sidecar — convention for replicator
+        const now = new Date().toISOString();
+        const sidecar = {
+          id,
           filename: params.name,
-          content: params.content,
-          type: params.type,
-          bucket: "artifacts",
-          mime: guessMime(params.name),
-          metadata: {
-            ...(params.template ? { template: params.template } : {}),
-          },
-          run_id: params.run_id || sessionId,
-          workspace: params.workspace || process.env.WORKSPACE,
-        });
-        const text = `Artifact written.\nRef: ${result.ref}\nID: ${result.id}\nSize: ${result.size} bytes\nHash: ${result.hash}`;
+          artifact_type: params.type,
+          agent_name: AGENT_NAME,
+          session_id: params.run_id || sessionId,
+          created_at: now,
+          content_hash: `sha256:${hash}`,
+          size_bytes: contentBuf.length,
+          mime_type: guessMime(params.name),
+          lineage: { inputs: [], method: "output" },
+          tags: [],
+        };
+        fs.writeFileSync(filePath + ".meta.json.tmp", JSON.stringify(sidecar, null, 2));
+        fs.renameSync(filePath + ".meta.json.tmp", filePath + ".meta.json");
+
+        // Provenance manifest
+        fs.appendFileSync(path.join(cwd, "provenance.jsonl"), JSON.stringify({
+          ts: now, tool: "write_artifact", id,
+          path: `output/${fullFilename}`,
+          inputs: [], method: "output", artifact_type: params.type,
+        }) + "\n");
+
+        const text = `Artifact written.\nID: ${id}\nSize: ${contentBuf.length} bytes\nHash: sha256:${hash}`;
         return { content: [{ type: "text" as const, text }] };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

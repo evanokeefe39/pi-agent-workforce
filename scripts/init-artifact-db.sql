@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS artifacts (
     artifact_type   TEXT        NOT NULL
         CHECK (artifact_type IN (
             'research', 'finding', 'log', 'dataset',
-            'code', 'brief', 'report', 'state', 'session'
+            'code', 'brief', 'report', 'state', 'session',
+            'image', 'render', 'document', 'package'
         )),
     mime_type       TEXT        NOT NULL,
     agent_name      TEXT        NOT NULL,
@@ -63,6 +64,27 @@ BEGIN
 END
 $$;
 
+-- Lineage edges table
+CREATE TABLE IF NOT EXISTS artifact_edges (
+    source_id   TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+    target_id   TEXT NOT NULL REFERENCES artifacts(id) ON DELETE RESTRICT,
+    edge_type   TEXT NOT NULL CHECK (edge_type IN (
+        'derived_from',
+        'informed_by',
+        'cites',
+        'contains',
+        'references',
+        'extracted_from'
+    )),
+    metadata    JSONB DEFAULT '{}'::jsonb,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_id, target_id, edge_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_edges_target ON artifact_edges(target_id);
+CREATE INDEX IF NOT EXISTS idx_edges_source ON artifact_edges(source_id);
+CREATE INDEX IF NOT EXISTS idx_edges_type ON artifact_edges(edge_type);
+
 GRANT ALL PRIVILEGES ON DATABASE artifact_store TO artifact;
-GRANT ALL PRIVILEGES ON TABLE artifacts TO artifact;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO artifact;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO artifact;
