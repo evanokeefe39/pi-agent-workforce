@@ -149,6 +149,8 @@ services:
         condition: service_healthy
       writer:
         condition: service_healthy
+      publisher:
+        condition: service_healthy
 
   researcher:
     <<: *agent
@@ -236,6 +238,31 @@ services:
       artifact-service:
         condition: service_healthy
 
+  publisher:
+    <<: *agent
+    build:
+      <<: *agent-build
+      target: publisher
+    ports:
+      - "8085:8080"
+    env_file:
+      - .env
+      - src/agents/publisher/.env
+    environment:
+      AGENT_NAME: "publisher"
+      WORKSPACE: "default"
+      ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      BRIDGE_TIMEOUT_MS: "600000"
+      MAX_CONCURRENT_SESSIONS: "2"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
+    volumes:
+      - publisher-workspace:/workspace
+      - ./project:/project:ro
+    depends_on:
+      artifact-service:
+        condition: service_healthy
+
 volumes:
   postgres-data:
     name: pi-agent-workforce-postgres-data
@@ -247,4 +274,6 @@ volumes:
     name: pi-agent-workforce-data-workspace
   writer-workspace:
     name: pi-agent-workforce-writer-workspace
+  publisher-workspace:
+    name: pi-agent-workforce-publisher-workspace
   openobserve-data:

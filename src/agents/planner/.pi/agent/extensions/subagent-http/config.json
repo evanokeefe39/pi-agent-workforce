@@ -2,7 +2,8 @@
   "agents": [
     { "name": "researcher", "url": "http://researcher:8080" },
     { "name": "data", "url": "http://data:8080" },
-    { "name": "writer", "url": "http://writer:8080" }
+    { "name": "writer", "url": "http://writer:8080" },
+    { "name": "publisher", "url": "http://publisher:8080" }
   ],
   "defaults": {
     "timeoutMs": 600000,
