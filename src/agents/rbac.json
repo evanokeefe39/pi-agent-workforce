@@ -43,7 +43,9 @@
     "coder": {
       "read": [
         "*/*/coder/**",
-        "*/*/researcher/**"
+        "*/*/researcher/**",
+        "*/*/writer/**",
+        "*/*/publisher/**"
       ],
       "write": ["*/*/coder/**"]
     },

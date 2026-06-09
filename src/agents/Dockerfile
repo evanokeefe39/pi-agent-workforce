@@ -58,7 +58,14 @@ FROM base AS ceo
 COPY ceo/.pi/agent/ /root/.pi/agent/
 COPY ceo/agent.json /app/ceo/agent.json
 
-FROM base AS coder
+# ============================================================
+# CODER — rendering toolchain (Chromium + React + Playwright)
+# ============================================================
+FROM base AS coder-deps
+RUN apt-get update && apt-get install -y --no-install-recommends chromium && rm -rf /var/lib/apt/lists/*
+RUN npm init -y && npm install playwright-core react react-dom tailwindcss @tailwindcss/cli
+
+FROM coder-deps AS coder
 COPY coder/.pi/agent/ /root/.pi/agent/
 COPY coder/agent.json /app/coder/agent.json
 COPY skills/brand-guidelines/ /root/.pi/agent/skills/brand-guidelines/

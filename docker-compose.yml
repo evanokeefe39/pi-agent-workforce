@@ -263,6 +263,34 @@ services:
       artifact-service:
         condition: service_healthy
 
+  coder:
+    <<: *agent
+    build:
+      <<: *agent-build
+      target: coder
+    ports:
+      - "8086:8080"
+    env_file:
+      - .env
+    environment:
+      AGENT_NAME: "coder"
+      WORKSPACE: "default"
+      ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      BRIDGE_TIMEOUT_MS: "600000"
+      MAX_CONCURRENT_SESSIONS: "2"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://openobserve:5080/api/default"
+      OTEL_EXPORTER_OTLP_HEADERS: "Authorization=Basic ${ZO_OTLP_AUTH}"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    volumes:
+      - coder-workspace:/workspace
+      - ./project:/project:ro
+    depends_on:
+      artifact-service:
+        condition: service_healthy
+
 volumes:
   postgres-data:
     name: pi-agent-workforce-postgres-data
@@ -276,4 +304,6 @@ volumes:
     name: pi-agent-workforce-writer-workspace
   publisher-workspace:
     name: pi-agent-workforce-publisher-workspace
+  coder-workspace:
+    name: pi-agent-workforce-coder-workspace
   openobserve-data:
