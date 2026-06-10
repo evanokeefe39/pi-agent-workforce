@@ -81,6 +81,8 @@ FROM base AS qa
 COPY qa/.pi/agent/ /root/.pi/agent/
 COPY qa/agent.json /app/qa/agent.json
 COPY skills/brand-guidelines/ /root/.pi/agent/skills/brand-guidelines/
+COPY skills/platform-formats/ /root/.pi/agent/skills/platform-formats/
+COPY skills/content-calendar/ /root/.pi/agent/skills/content-calendar/
 
 FROM base AS publisher
 COPY publisher/.pi/agent/ /root/.pi/agent/
