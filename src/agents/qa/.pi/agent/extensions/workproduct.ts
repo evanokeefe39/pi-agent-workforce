@@ -600,4 +600,287 @@ export default function (pi: ExtensionAPI) {
       }
     },
   });
+
+  // ---- record_violation ----
+  pi.registerTool({
+    name: "record_violation",
+    label: "Record Violation",
+    description:
+      "Record a quality violation found during content evaluation. " +
+      "Captures the rule violated, severity, domain, exact evidence, " +
+      "fix recommendation, standard reference, and source artifact.",
+    parameters: Type.Object({
+      rule_id: Type.String({
+        description: "Unique rule identifier (e.g. WRITE-AP1-GENERIC-HYPE, PLATFORM-TIKTOK-HOOK-80CHAR)",
+      }),
+      severity: Type.Union(
+        [Type.Literal("critical"), Type.Literal("major"), Type.Literal("minor")],
+        { description: "Violation severity" },
+      ),
+      domain: Type.Union(
+        [
+          Type.Literal("content-quality"),
+          Type.Literal("platform-compliance"),
+          Type.Literal("brand-compliance"),
+          Type.Literal("research-quality"),
+          Type.Literal("publish-readiness"),
+        ],
+        { description: "Evaluation domain" },
+      ),
+      evidence: Type.String({
+        description: "Exact text, element, or condition that constitutes the violation",
+      }),
+      recommendation: Type.String({
+        description: "Specific fix recommendation",
+      }),
+      standard_ref: Type.String({
+        description: "Path to the skill or standard that defines this rule",
+      }),
+      source_artifact: Type.String({
+        description: "Artifact URI or ID of the content under review",
+      }),
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const result = writeLocal("evaluations", "violation", `${params.rule_id}.json`, params.evidence, {
+          rule_id: params.rule_id,
+          severity: params.severity,
+          domain: params.domain,
+          evidence: params.evidence,
+          recommendation: params.recommendation,
+          standard_ref: params.standard_ref,
+          source_artifact: params.source_artifact,
+          session_id: getSessionId(),
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Violation recorded: ${result.id}\n  Rule: ${params.rule_id}\n  Severity: ${params.severity}\n  Domain: ${params.domain}`,
+          }],
+          details: { id: result.id, rule_id: params.rule_id, severity: params.severity },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
+
+  // ---- record_commendation ----
+  pi.registerTool({
+    name: "record_commendation",
+    label: "Record Commendation",
+    description:
+      "Record a positive quality finding — a best practice followed or standard exceeded. " +
+      "Captures the rule met, domain, exact evidence, standard reference, impact level, " +
+      "and source artifact.",
+    parameters: Type.Object({
+      rule_id: Type.String({
+        description: "Unique rule identifier (e.g. CONTENT-SPECIFICITY, BRAND-DARK-THEME)",
+      }),
+      domain: Type.Union(
+        [
+          Type.Literal("content-quality"),
+          Type.Literal("platform-compliance"),
+          Type.Literal("brand-compliance"),
+          Type.Literal("research-quality"),
+          Type.Literal("publish-readiness"),
+        ],
+        { description: "Evaluation domain" },
+      ),
+      evidence: Type.String({
+        description: "Exact text, element, or condition demonstrating compliance or excellence",
+      }),
+      standard_ref: Type.String({
+        description: "Path to the skill or standard that defines this rule",
+      }),
+      impact: Type.Union(
+        [Type.Literal("high"), Type.Literal("medium"), Type.Literal("low")],
+        { description: "Impact level of this commendation" },
+      ),
+      source_artifact: Type.String({
+        description: "Artifact URI or ID of the content under review",
+      }),
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const result = writeLocal("evaluations", "commendation", `${params.rule_id}.json`, params.evidence, {
+          rule_id: params.rule_id,
+          domain: params.domain,
+          evidence: params.evidence,
+          standard_ref: params.standard_ref,
+          impact: params.impact,
+          source_artifact: params.source_artifact,
+          session_id: getSessionId(),
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: `Commendation recorded: ${result.id}\n  Rule: ${params.rule_id}\n  Domain: ${params.domain}\n  Impact: ${params.impact}`,
+          }],
+          details: { id: result.id, rule_id: params.rule_id, impact: params.impact },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
+
+  // ---- list_evaluations ----
+  pi.registerTool({
+    name: "list_evaluations",
+    label: "List Evaluations",
+    description:
+      "Query recorded violations and commendations with optional filters. " +
+      "Returns matching evaluations sorted by timestamp descending.",
+    parameters: Type.Object({
+      type: Type.Optional(Type.Union(
+        [Type.Literal("violation"), Type.Literal("commendation")],
+        { description: "Filter by evaluation type" },
+      )),
+      domain: Type.Optional(Type.String({ description: "Filter by domain" })),
+      severity: Type.Optional(Type.String({ description: "Filter by severity (violations only)" })),
+      source_artifact: Type.Optional(Type.String({ description: "Filter by source artifact" })),
+      since: Type.Optional(Type.String({ description: "ISO 8601 — only evaluations after this timestamp" })),
+      limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500, description: "Max results, default 100" })),
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const types = params.type ? [params.type] : ["violation", "commendation"];
+        let records: LocalRecord[] = types.flatMap(t =>
+          listLocal("evaluations", { type: t, since: params.since }),
+        );
+
+        if (params.domain) {
+          records = records.filter(r => (r.metadata as any).domain === params.domain);
+        }
+        if (params.severity) {
+          records = records.filter(r =>
+            r.type === "violation" && (r.metadata as any).severity === params.severity,
+          );
+        }
+        if (params.source_artifact) {
+          records = records.filter(r => (r.metadata as any).source_artifact === params.source_artifact);
+        }
+
+        records.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+        const limit = params.limit || 100;
+        records = records.slice(0, limit);
+
+        if (records.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "No evaluations match the filters." }],
+            details: { count: 0 },
+          };
+        }
+
+        const lines: string[] = [`Found ${records.length} evaluation(s):\n`];
+        for (const rec of records) {
+          const m = rec.metadata as Record<string, any>;
+          const sev = m.severity ? ` [${m.severity}]` : "";
+          const imp = m.impact ? ` [${m.impact}]` : "";
+          lines.push(`[${rec.id}] ${rec.type}${sev}${imp} | ${m.rule_id} | ${m.domain}`);
+        }
+
+        return {
+          content: [{ type: "text" as const, text: lines.join("\n") }],
+          details: { count: records.length },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
+
+  // ---- export_evaluations_jsonl ----
+  pi.registerTool({
+    name: "export_evaluations_jsonl",
+    label: "Export Evaluations as JSONL",
+    description:
+      "Export all recorded violations and commendations as a JSONL string. " +
+      "Each line is a JSON object with type, rule_id, severity/impact, domain, " +
+      "evidence, recommendation/standard_ref, and source_artifact. " +
+      "Use the output with write_artifact to publish the evaluation dataset.",
+    parameters: Type.Object({
+      source_artifact: Type.Optional(Type.String({
+        description: "Filter to evaluations for a specific source artifact",
+      })),
+      since: Type.Optional(Type.String({
+        description: "ISO 8601 — only evaluations after this timestamp",
+      })),
+    }),
+    async execute(_toolCallId: string, params: Record<string, any>, _signal?: AbortSignal) {
+      try {
+        const allRecords: LocalRecord[] = ["violation", "commendation"].flatMap(t =>
+          listLocal("evaluations", { type: t, since: params.since }),
+        );
+
+        let records = allRecords;
+        if (params.source_artifact) {
+          records = records.filter(r => (r.metadata as any).source_artifact === params.source_artifact);
+        }
+
+        records.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+        if (records.length === 0) {
+          return {
+            content: [{ type: "text" as const, text: "No evaluations to export." }],
+            details: { count: 0 },
+          };
+        }
+
+        const lines: string[] = [];
+        let criticalCount = 0, majorCount = 0, minorCount = 0, commendationCount = 0;
+
+        for (const rec of records) {
+          const m = rec.metadata as Record<string, any>;
+          if (rec.type === "violation") {
+            const sev = m.severity || "minor";
+            if (sev === "critical") criticalCount++;
+            else if (sev === "major") majorCount++;
+            else minorCount++;
+            lines.push(JSON.stringify({
+              type: "violation",
+              rule_id: m.rule_id,
+              severity: sev,
+              domain: m.domain,
+              evidence: m.evidence,
+              recommendation: m.recommendation,
+              standard_ref: m.standard_ref,
+              source_artifact: m.source_artifact,
+            }));
+          } else {
+            commendationCount++;
+            lines.push(JSON.stringify({
+              type: "commendation",
+              rule_id: m.rule_id,
+              domain: m.domain,
+              evidence: m.evidence,
+              standard_ref: m.standard_ref,
+              impact: m.impact,
+              source_artifact: m.source_artifact,
+            }));
+          }
+        }
+
+        const summary = `Exported ${records.length} evaluations:\n  Violations: ${criticalCount} critical, ${majorCount} major, ${minorCount} minor\n  Commendations: ${commendationCount}`;
+
+        return {
+          content: [{ type: "text" as const, text: `${summary}\n\n${lines.join("\n")}` }],
+          details: {
+            count: records.length,
+            violations: { critical: criticalCount, major: majorCount, minor: minorCount },
+            commendations: commendationCount,
+          },
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { content: [{ type: "text" as const, text: `Error: ${msg}` }] };
+      }
+    },
+  });
 }
