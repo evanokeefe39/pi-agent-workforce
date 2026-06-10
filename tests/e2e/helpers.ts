@@ -15,6 +15,7 @@ export const URLS = {
   writer:     process.env.WRITER_URL     || "http://localhost:8084",
   publisher:  process.env.PUBLISHER_URL  || "http://localhost:8085",
   coder:      process.env.CODER_URL      || "http://localhost:8086",
+  qa:         process.env.QA_URL         || "http://localhost:8087",
   artifacts:  process.env.ARTIFACT_URL   || "http://localhost:8090",
 } as const;
 
