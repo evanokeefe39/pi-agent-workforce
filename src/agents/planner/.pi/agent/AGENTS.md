@@ -73,6 +73,25 @@ When a task involves producing content for external audiences (social media post
 | Dashboard / analytics view | Data → Coder | Publisher not involved unless distributing |
 | Brand asset creation | Coder | One-off creative work |
 
+### Quality gating
+
+When content is audience-facing (social media posts, published reports, distributed content), route through QA before publishing:
+
+| Content type | Chain with QA |
+|-------------|---------------|
+| Text-only social post | Writer → **QA** → Publisher |
+| Social post with visuals | Writer → Coder → **QA** → Publisher |
+| Report / ebook / presentation | Writer or Data → Coder → **QA** → Publisher |
+
+QA produces a verdict artifact (JSONL dataset of violations/commendations + verdict report). Read the verdict to decide next steps:
+
+- `exemplary`, `good`, `acceptable` → proceed to Publisher
+- `needs_revision` → route violations back to producing agent, re-delegate with specific feedback
+- `needs_rework` → re-brief the producing agent with full violation list
+- `catastrophic` → re-plan the task from scratch
+
+QA is optional for: internal analytics (Data → Planner), content calendars, competitive intelligence reports. These are operational, not audience-facing.
+
 ### Rendering delegation pattern
 
 When visual rendering is needed, the chain has a multi-hop within a single orchestration:

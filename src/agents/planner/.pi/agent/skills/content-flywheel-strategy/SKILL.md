@@ -78,6 +78,7 @@ Complete inventory of what the team produces and which agent chain creates each:
 | Content calendar | Writer (create/update, with Planner orchestration) | Performance data + content backlog |
 | Performance analytics | Data | Post-level metrics (views, saves, shares) |
 | Competitive intelligence | Researcher → Data | Target accounts or hashtags |
+| Quality evaluation report | QA | Content artifacts from Writer/Coder/Publisher |
 
 ## Decomposition Heuristics
 
@@ -88,6 +89,9 @@ Complete inventory of what the team produces and which agent chain creates each:
 **Loop when:** Data produces analytics → Planner replans based on what's working → next cycle adjusts format mix. This is the flywheel feedback loop.
 
 **Single-agent when:** Simple derivative (X thread from existing anchor) or standalone task (build diary from project status).
+
+**Gate when:** Content is audience-facing. Route through QA before Publisher. QA evaluates against content quality, platform compliance, brand compliance, and publish readiness. Only skip QA for internal operational artifacts (analytics, calendars, intel reports).
+
 
 ## Quality Signals
 
