@@ -1,0 +1,27 @@
+# Vendor configuration — single source of truth for all external provider references.
+# Skills cross-reference capabilities and point here for concrete values.
+
+scraping:
+  tiktok:
+    provider: apify
+    actor: clockworks/tiktok-scraper
+    default_max_items: 50
+    notes: "50 posts/tag for small-account competitive intel"
+  tiktok_profile:
+    provider: apify
+    actor: clockworks/tiktok-profile-scraper
+    cost_per_result: 0.004
+    notes: "Profile-level scraping, use flatten: authorMeta,videoMeta"
+  instagram:
+    provider: apify
+    actor: apify/instagram-scraper
+    default_max_items: 50
+
+scheduling:
+  multi_account:
+    provider: typefully
+    monthly_cost_usd: 19
+    notes: "Add accounts after first 50K+ view post"
+
+analytics:
+  # future: platform API integrations
