@@ -4,13 +4,18 @@
   "title": "Quality Assurance",
   "icon": "shield",
   "reportsTo": "CEO",
-  "capabilities": "Evaluative gating, branding checks, coding standards validation, kaizen integration",
+  "capabilities": "Content flywheel quality evaluation, severity-graded verdicts (exemplary to catastrophic), positive and negative vetting, structured JSONL workproduct, domain-specific audit (content quality, platform compliance, brand compliance, research quality, publish readiness)",
   "adapterType": "http",
   "adapterConfig": {
     "url": "http://qa:8080/invoke",
     "timeoutSec": 300
   },
   "runtimeConfig": {
-    "heartbeat": { "enabled": true, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 }
+    "heartbeat": { "enabled": true, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 },
+    "validation": {
+      "maxTurns": 40,
+      "requiredTools": ["record_violation", "record_commendation", "write_artifact"],
+      "requiredArtifactType": "dataset"
+    }
   }
 }
