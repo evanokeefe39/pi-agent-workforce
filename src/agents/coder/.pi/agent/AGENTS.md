@@ -42,6 +42,57 @@ Expected input from Publisher:
 }
 ```
 
+## Mandatory: render.mjs + Design System Components
+
+All rendering MUST use the render helper script with design system components. Writing raw HTML is prohibited.
+
+### Render Script Usage
+
+```bash
+node /project/scripts/render.mjs \
+  --entry <component>.jsx \
+  --out /workspace/output/<name>.png \
+  --width <W> --height <H> \
+  [--props '<json>'] [--props-file <path>]
+```
+
+### Component Import Pattern
+
+Every JSX file must import from the design system:
+
+```jsx
+import { CarouselSlide, Card, Column, Heading, Body, Caption } from '/project/design-system/index.js';
+```
+
+### Available Components
+
+| Component | Purpose | Key Props |
+|-----------|---------|-----------|
+| CarouselSlide | Full-bleed slide container | slideNumber, totalSlides |
+| Card | Bordered content card | padding, style |
+| Row / Column | Flex layout | gap (8px units), align, justify |
+| Heading | h1-h4 typography | level (1-4) |
+| Body | Body text | -- |
+| Caption | Secondary text | -- |
+| Code | Monospace text | -- |
+| Stat | Large metric display | -- |
+| ReportPage | A4 page layout | pageNumber, totalPages, title |
+| DataViz | Chart wrapper | title, subtitle, source |
+
+### Reference Templates
+
+Start from these, adapt to the render brief:
+- `/project/templates/carousel/five-slide-tips.jsx` -- carousel with title + tips + CTA
+- `/project/templates/report/standard-report.jsx` -- multi-page report
+
+### Rules
+
+1. NEVER hardcode colors -- use CSS custom properties (`var(--bg-primary)`, `var(--accent-blue)`, etc.)
+2. NEVER hardcode font families -- use `var(--font-sans)` or `var(--font-mono)`
+3. NEVER write raw `<div>` with inline styles when a design system component exists
+4. Spacing: use component gap props (8px grid units) or `var(--space-N)` tokens
+5. If you need a component that doesn't exist: escalate to Planner
+
 ## Project Workspace
 
 Read-only project assets mounted at `/project/`:

@@ -9,6 +9,7 @@ metadata:
   author: evan
   version: 1.0.0
   domain: content-production
+  related: [derivative-formats, content-flywheel-production]
 ---
 
 # Hook Formulas — Dev Niche Performance Rankings
@@ -66,3 +67,27 @@ Hook types ranked by measured save rate from analysis of 532 posts in the AI/tec
 - Save-optimized hooks (numbered_promise, how_to) outperform on Instagram
 - Carousel first slide IS the hook — text must be readable at thumbnail size
 - Keywords in first line outperform hashtags for discoverability
+
+## Format Performance Benchmarks
+
+Content formats ranked by measured save rate (n=611 classified posts, dev/AI/build niche):
+
+| Format | Save Rate | Typical Hook | Duration |
+|--------|-----------|-------------|----------|
+| Numbered resource list | 4-8% | numbered_promise | 50-90s |
+| Tier rating | 4-6% | personal_story | 45-75s |
+| Book breakdown | 4-6% | numbered_promise | 50-90s |
+| Tool demo | 2-3% | contrarian | 30-60s |
+| Comparison | 3-5% | contrarian or versus | 45-75s |
+| Build journal | 1-2% | personal_story | 30-45s |
+| Opinion / analysis | 1-2% | contrarian | 20-30s |
+| Weekly recap | 2-4% | listicle | 45-75s |
+
+### Performance Tiers
+
+| Metric | Below Avg | Average | Good | Elite |
+|--------|-----------|---------|------|-------|
+| Save rate | <1.5% | 1.5-3% | 3-5% | 5%+ |
+| Fans/video | <30 | 30-100 | 100-300 | 300+ |
+| Hearts/fans ratio | <3x | 3-5x | 5-15x | 15x+ |
+| Duration sweet spot | -- | -- | 50-90s | -- |

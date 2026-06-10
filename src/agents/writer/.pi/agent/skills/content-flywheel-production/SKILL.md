@@ -9,6 +9,7 @@ metadata:
   author: evan
   version: 1.0.0
   domain: content-strategy
+  related: [hook-formulas, derivative-formats]
 ---
 
 # Content Flywheel Production — Writer Perspective
@@ -77,3 +78,14 @@ Before marking any derivative complete:
 - **CTA presence**: Is there a clear next action for the reader? (save, comment, follow, try it)
 - **Standalone value**: Can someone on this platform alone get full value without seeing the anchor?
 - **Voice match**: Does it sound like the social voice profile, not the analytical voice?
+
+## Anti-Patterns — Never Write These
+
+Evidence from 611 classified posts. Expanded examples in `{baseDir}/../social-media-content/references/writing-anti-patterns.md`.
+
+1. **Generic AI hype** — "AI is changing everything" with no specific tool named. 1.62% save rate vs 2.40% with specifics (49% lift from naming a tool).
+2. **News without analysis** — "[Model] just dropped and it's INSANE." Stale within 24h, 1.07% save rate.
+3. **Versus without verdict** — fence-sitting kills engagement. 0.62% save rate, worst hook type. Reframe as contrarian: "Stop using X. Here's why Y is better" (2.7x lift).
+4. **Engagement bait without value** — "Like if you agree!" No save reason, algorithm deprioritizes.
+5. **Overlong intros** — "Hey everyone, welcome back..." wastes first 3 seconds. 50% of viewers drop before second 4.
+6. **Off-niche content** — causes immediate reach collapse after viral posts. Stay in dev/AI/build niche.

@@ -8,6 +8,7 @@ metadata:
   author: evan
   version: 1.0.0
   domain: content-production
+  related: [hook-formulas, content-flywheel-production]
 ---
 
 # Derivative Formats — Writer Work Product Catalog
@@ -63,3 +64,27 @@ When voice profile is "(none)" (e.g., deep post building blocks), write in neutr
 - Use brief voice mode (neutral imperative: "Produce a 10-slide carousel...")
 - Include: slide count, content per slide, visual direction, CTA slide content
 - Specify dimensions (1080x1350 Instagram standard) and any data visualizations needed
+
+### Video Script Template
+
+Standard structure for short-form video (TikTok captions, Reel captions, video outlines):
+
+```
+HOOK (0-3s): [hook formula from hook-formulas skill]
+PROMISE (3-8s): brief statement of what viewer gets
+BODY (8-50s): deliver items/steps/insights
+  - Item 1 (3-10s): [specific name] + [one sentence why]
+  - Item 2 (3-10s): ...
+  - Item 3 (3-10s): ...
+CTA (last 5-10s): spoken save/DM CTA
+```
+
+Duration targets by format:
+
+| Format | Duration |
+|--------|----------|
+| Numbered resource list | 60-90s |
+| Tool demo | 30-60s |
+| Build journal | 30-45s |
+| Opinion / analysis | 20-30s |
+| Tier rating | 45-75s |

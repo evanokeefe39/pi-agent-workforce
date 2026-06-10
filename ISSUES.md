@@ -50,25 +50,6 @@ Why 5: The retry logic assumes the error message is the ONLY assistant message a
 
 ---
 
-## OPEN: Coder rendering quality — inline HTML instead of design system components
-
-**Status:** Open
-**Severity:** Medium — functional but suboptimal output quality
-
-**Problem:** Coder agent writes its own inline HTML for rendering instead of using design system components (Card, CarouselSlide, Typography, etc.) in project/design-system/. Results have excess whitespace, inconsistent styling, and don't match brand guidelines.
-
-**Root cause:** No JSX transform in container — coder can't import and render React components directly. Agent writes raw HTML + inline styles, ignoring the design system entirely.
-
-**Current behavior:** Coder receives render brief, writes standalone HTML with Playwright screenshot. Output is functional but visually inconsistent — each render is a one-off.
-
-**Desired behavior:** Coder uses design system tokens (colors, spacing, typography) at minimum. Ideally renders design system components via a build step or pre-compiled bundle.
-
-**Options:**
-1. Pre-bundle design system components into a single JS file coder can `<script>` include
-2. Inject tokens.css and component templates into coder's prompt context
-3. Add esbuild/swc JSX transform to coder container
-4. Accept inline HTML but enforce token usage via jidoka validation
-
 ---
 
 ## OPEN: Mid-run jidoka should escalate, not just warn
@@ -213,28 +194,6 @@ Why 5: The retry logic assumes the error message is the ONLY assistant message a
 **Additional gap:** Data agent needs implementation for numerical analysis of scraped data. Currently data agent can scrape but does not perform statistical or trend analysis on the results.
 
 ---
-
-## OPEN: Writing-style extension tools not usable by writer agent
-
-**Status:** Investigating
-**Severity:** Medium — writer adapts by crafting its own style block, but misses mechanical validation
-
-**Symptoms:** Writer agent said "I don't have a get_style_instructions tool" and crafted its own style block manually. Agent never attempted calling the tool — it inspected its tool list and determined the tool wasn't available.
-
-**Investigation so far:**
-- Extension files present in container at `/root/.pi/agent/extensions/writing-style/` (index.ts, lint.ts, profile.ts, metrics.ts)
-- Data files present at `/app/data/style/`
-- Startup logs show 12 extensions loaded, no errors
-- /describe endpoint shows 12 extensions but tools array is empty (endpoint doesn't enumerate tools)
-- Agent DID use `write_artifact` (from artifacts extension) successfully, proving some extension tools work
-- The `|| true` in Dockerfile `pi extensions install` swallows any compilation errors
-
-**Unknown:** Whether the model change to V4 Flash resolves this. V4 Flash has better tool-calling compliance than previous models but this has not been retested.
-
-**Next steps:**
-- Rebuild with V4 Flash and retest
-- Remove `|| true` from Dockerfile temporarily to surface compilation errors
-- Create targeted test that sends a task requesting `validate_style` and checks the result
 
 ---
 
@@ -456,6 +415,28 @@ added 2 packages, and audited 97 packages in 3s
 
 <details>
 <summary>Resolved Issues</summary>
+
+## RESOLVED: Coder rendering quality — inline HTML instead of design system components
+
+**Status:** Resolved 2026-06-11
+**Fix:** Added esbuild to coder-deps Dockerfile stage. Created `project/scripts/render.mjs` — JSX-to-screenshot pipeline using esbuild + Playwright. Coder writes JSX with design system components, render.mjs bundles everything (React, ReactDOM, components, tokens) into a single IIFE and renders via headless Chromium. Includes soft validation for hardcoded token colors. Updated coder AGENTS.md with mandatory component usage rules and render script documentation. Added e2e-51 tests A5 (esbuild) and B4 (render.mjs).
+
+---
+
+## RESOLVED: Writing-style extension tools not usable by writer agent
+
+**Status:** Resolved 2026-06-11
+**Root cause:** Tools registered correctly by extension, but writer's `pi-permissions.jsonc` had `"*": "deny"` and never added style tools to the allow list. Tools were effectively blocked.
+**Fix:** Added 6 tool permissions to writer's pi-permissions.jsonc: validate_style, fix_violations, vale_lint, load_style_profile, analyze_writing_samples, get_style_instructions. Updated section-writer subagent to include validate_style, fix_violations, get_style_instructions in tools list. Added programmatic validate_style step before manual self-review checklist. Added `pi extensions list` to Dockerfile build for visibility. E2E-53 validates configuration (24 static tests).
+
+---
+
+## RESOLVED: Writer social-media-content skill overlap
+
+**Status:** Resolved 2026-06-11
+**Fix:** Migrated 4 unique sections from social-media-content to targeted skills: anti-patterns to content-flywheel-production, video script structure to derivative-formats, format benchmarks + performance tiers to hook-formulas. Deprecated social-media-content with redirect notice. Added cross-references between all three target skills. References/writing-anti-patterns.md preserved in original location.
+
+---
 
 ## RESOLVED: Cerebras removed Qwen3 32B and Llama 3.3 70B from API
 

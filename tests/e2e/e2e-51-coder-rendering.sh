@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # E2E-51: Coder Rendering Smoke Test
 # Tests:
-#   A: Docker toolchain (chromium, playwright, react in container)
-#   B: Design system mounted and accessible
+#   A: Docker toolchain (chromium, playwright, react, esbuild in container)
+#   B: Design system mounted and accessible (incl. render.mjs)
 #   C: Live render task produces PNG at correct dimensions
 #   D: Artifact replication succeeds
 # Requires: coder + artifact-service running (docker compose up -d coder)
@@ -71,8 +71,15 @@ else
   fail "A4: Tailwind CSS not importable"
 fi
 
+# A5: esbuild installed
+if docker exec "$CONTAINER" bash -c 'npx esbuild --version 2>/dev/null' | grep -qE '[0-9]+\.[0-9]+'; then
+  pass "A5: esbuild installed"
+else
+  fail "A5: esbuild not found in container"
+fi
+
 # ============================================================
-# TEST B: Design system + skills mounted (3 tests)
+# TEST B: Design system + skills mounted (4 tests)
 # ============================================================
 echo ""; echo "--- Test B: Design System & Skills ---"
 
@@ -95,6 +102,13 @@ if docker exec "$CONTAINER" bash -c 'test -f /root/.pi/agent/skills/platform-for
   pass "B3: platform-formats skill present"
 else
   fail "B3: platform-formats skill missing"
+fi
+
+# B4: render.mjs present and valid
+if docker exec "$CONTAINER" bash -c 'test -f /project/scripts/render.mjs && node --check /project/scripts/render.mjs 2>/dev/null && echo ok' 2>/dev/null | grep -q "ok"; then
+  pass "B4: render.mjs present and syntactically valid"
+else
+  fail "B4: render.mjs missing or invalid"
 fi
 
 # ============================================================

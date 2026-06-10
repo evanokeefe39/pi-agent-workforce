@@ -1,7 +1,7 @@
 ---
 name: section-writer
 description: Writes and polishes one document section from a brief file. Produces a clean, style-compliant section ready for assembly.
-tools: read, write, bash
+tools: read, write, bash, validate_style, fix_violations, get_style_instructions
 role: fast
 thinking: medium
 max_turns: 12
@@ -34,6 +34,10 @@ Follow the style_block from the brief exactly. Additionally:
 - Use contractions unless the brief says otherwise
 
 ## Self-review checklist
+
+If `validate_style` tool is available, run it on the draft text before the manual checklist.
+It checks burstiness, em-dash density, excess words, and active voice ratio programmatically.
+Fix any violations it reports before proceeding to the manual checklist below.
 
 After writing the draft, check each item. Fix violations before saving.
 
