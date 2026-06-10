@@ -19,11 +19,13 @@ COPY extensions/web-search.ts /root/.pi/agent/extensions/web-search.ts
 COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
 RUN pi extensions install || true
-RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && npm install pi-otel 2>/dev/null || true
+RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && \
+    npm install @tintinweb/pi-tasks pi-subagents pi-otel pi-permission-system --legacy-peer-deps 2>&1 || true
+ENV PI_OFFLINE=1
 ENV WORKSPACE_DIR=/workspace
 RUN mkdir -p /workspace
 EXPOSE 8080
-HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=3 \
   CMD bun -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 CMD ["bun", "run", "server.ts"]
 
@@ -46,10 +48,12 @@ RUN cd /root/.pi/agent/extensions/subagent-http && npm install --omit=dev 2>/dev
 COPY planner/.pi/agent/ /root/.pi/agent/
 COPY planner/agent.json /app/planner/agent.json
 RUN pi extensions install || true
-RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && npm install pi-otel 2>/dev/null || true
+RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && \
+    npm install @tintinweb/pi-tasks pi-subagents pi-otel pi-permission-system --legacy-peer-deps 2>&1 || true
+ENV PI_OFFLINE=1
 RUN mkdir -p /workspace
 EXPOSE 8080
-HEALTHCHECK --interval=10s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=3 \
   CMD bun -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 CMD ["bun", "run", "server.ts"]
 
