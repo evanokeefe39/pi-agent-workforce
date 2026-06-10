@@ -48,6 +48,7 @@ Delegation blocks until agent completes. Parallel via `tasks: [...]`. Session ID
 | `src/artifact-service/` | Bun artifact store (routes.ts, metastore.ts, graph.ts, rbac.ts) |
 | `src/artifact-service/graph.ts` | Graphology-based lineage graph (BFS trace, PROV-JSON export) |
 | `src/lineage-ui/` | React + @xyflow/react lineage visualization (served at /ui/) |
+| `tests/e2e/helpers.ts` | Shared E2E test utilities (health, invoke/poll, artifact queries, report gen) |
 | `docs/model-selection.md` | Model decisions, provider catalog, cost analysis |
 | `tasks/lessons.md` | Patterns from corrections — read before starting work |
 | `ISSUES.md` | Open issues, resolved issues collapsed at bottom |
@@ -76,10 +77,15 @@ Planner :8081, Researcher :8082, Data :8083, Writer :8084, Publisher :8085, Code
 ## Running tests
 
 ```bash
+# Bun/TypeScript tests (new — run with bun test)
+bun test tests/e2e/e2e-00-smoke.test.ts                # full pipeline smoke test (~3 min, 8 tests)
+bun test tests/e2e/e2e-30-instagram-growth-research.test.ts  # full planner pipeline (~12 min, 8 tests)
+
+# Bash tests (legacy — migrating to Bun/TS)
 bash tests/e2e/e2e-32-model-and-output-validation.sh  # model + concurrency (11 tests)
 bash tests/e2e/e2e-35-session-isolation.sh             # session dirs, replication (11 tests)
 bash tests/e2e/e2e-34-data-agent-analysis.sh           # data agent workproduct tools
-bash tests/e2e/e2e-30-instagram-growth-research.sh     # full planner pipeline
+bash tests/e2e/e2e-30-instagram-growth-research.sh     # full planner pipeline (legacy bash version)
 node tests/e2e/e2e-40-lineage-service.mjs --latest     # lineage API + graph (25 tests)
 node tests/e2e/artifact-lineage.mjs --latest           # ASCII lineage report
 node tests/e2e/artifact-lineage-html.mjs --latest      # HTML graph report

@@ -202,3 +202,10 @@
 **Rule:** When server.ts (or any `/app/` code) needs to import a package, it must be in `src/agents/package.json` — even if the same package exists elsewhere in the container (pi extensions, npm packages). Bun resolves from the importing file's location. Pi extensions live in `/root/.pi/agent/npm/node_modules/` which is NOT on the resolution path for `/app/server.ts`. The @opentelemetry/api package uses `Symbol.for()` for process-global singleton state, so having two copies (one in /app/, one in pi-otel's tree) is safe — they share the same TracerProvider.
 **How to apply:** Before using `import("some-package")` in server.ts, verify it's in `src/agents/package.json`. Run `bun install` to update the lockfile. Test with `docker exec <container> sh -c "bun -e \"require('some-package')\""` from /app/ context to verify resolution.
 **How to apply:** When adding new artifact types: add to Postgres CHECK constraint, add to artifact service VALID_ARTIFACT_TYPES set, add normalization to the producing agent's workproduct extension. Replicator stays unchanged.
+
+## Subagent artifacts have their own run_id — use `since` for pipeline-scoped queries
+
+**Date:** 2026-06-10
+**Trigger:** E2E-30 TypeScript migration. `artifactsByRun(plannerRunId)` returned 0 results despite 9 artifacts created by researcher + writer. Each agent generates its own sessionId via `createAgentSession`; artifact run_id = subagent's sessionId, not planner's requestId. Planner passes `correlationId` (its sessionId) but subagents don't use it as artifact run_id.
+**Rule:** To query all artifacts from a pipeline run (planner + subagents), use `GET /artifacts?since=<invokeTimestamp>` with a timestamp captured before the invoke call. `run_id` only matches a single agent's artifacts. The `since` parameter is supported by the artifact service (metastore.ts line 95, routes.ts line 224).
+**How to apply:** In E2E tests, capture `new Date().toISOString()` before `plannerRun()`, pass to `artifactsSince_time()`. Never use `artifactsByRun(plannerRunId)` expecting cross-agent results.

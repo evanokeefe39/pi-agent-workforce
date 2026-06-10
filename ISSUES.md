@@ -283,6 +283,67 @@ added 2 packages, and audited 97 packages in 3s
 
 ---
 
+## OPEN: Container cold start still 55s after pre-install optimization
+
+**Status:** Open — monitor, low priority
+**Severity:** Low
+
+**Problem:** Container startup reduced from 225s to 55s via pre-install + PI_OFFLINE=1 (commit 1845faf), but 55s is still slow. Healthcheck start_period must accommodate this delay, and first request after startup has added latency.
+
+**What was done:**
+- All npm packages pre-installed at Docker build time
+- PI_OFFLINE=1 set to skip runtime npm resolution
+- Startup went from 225s → 55s (4x improvement)
+
+**Remaining 55s breakdown (estimated):**
+- Pi SDK initialization (createAgentSessionServices, extension loading)
+- Bun + Fastify server setup
+- Extension compilation/registration (12 extensions)
+
+**Possible further optimizations:**
+1. Profile SDK init to find the dominant cost
+2. Lazy extension loading — only compile extensions on first use, not at startup
+3. Pre-compile extensions at build time if Pi SDK supports it
+4. Snapshot/cache the initialized SDK state
+5. Warm pool — keep one pre-initialized session ready
+
+**Not urgent:** Current 55s is workable with appropriate healthcheck start_period. Optimize when it becomes a bottleneck for iteration speed or scaling.
+
+---
+
+## OPEN: Migrate E2E tests from bash to Bun/TypeScript
+
+**Status:** E2E-30 migrated, remaining tests not started
+**Severity:** Medium — test brittleness blocks reliable CI and pipeline validation
+
+**Problem:** E2E tests written in bash (jsonl-helpers.sh + per-test .sh scripts) are fragile. E2E-30 fails silently due to shell limitations, not actual pipeline failures.
+
+**Root causes of brittleness:**
+1. Shell heredoc expansion on megabytes of JSONL content (write_report uses `cat <<EOF` with `$@`)
+2. No run scoping — artifact queries return all-time results, source analysis loop processes all 67 datasets instead of just this run's
+3. `2>/dev/null || true` everywhere swallows errors silently
+4. Bash variables holding large JSON content corrupt or truncate
+5. `docker logs | grep` for tool counting is fuzzy — matches log messages, accumulates across runs
+6. `set -euo pipefail` + bash arithmetic (`((_PASS++))`) has exit-code edge cases
+7. `artifacts_since` uses count diff, not filtered query — breaks under concurrent runs
+
+**Decision:** Migrate to Bun + TypeScript (`bun:test`).
+
+**Why Bun/TS over Python:**
+- Bun already in every container, TypeScript is the project language — no new runtime
+- `bun:test` has expect/assertions, beforeAll hooks, describe/it blocks
+- Native fetch, async/await for polling, proper JSON handling
+- Typed responses, shares types with server.ts
+- Avoids maintaining tests in a third language
+
+**Migration plan:**
+1. Create `tests/e2e/helpers.ts` — shared utilities (health check, planner invoke/poll, artifact queries, run-scoped filtering)
+2. Rewrite E2E-30 as `tests/e2e/e2e-30-instagram-growth-research.test.ts` — template for all migrations
+3. Migrate other tests incrementally, bash scripts remain until replaced
+4. Remove jsonl-helpers.sh when all tests migrated
+
+---
+
 ## OPEN: Agent-to-user escalation over HTTP — AskUserQuestion equivalent
 
 **Status:** Not started
