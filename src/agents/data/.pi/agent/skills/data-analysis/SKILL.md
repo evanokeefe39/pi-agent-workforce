@@ -90,6 +90,26 @@ SELECT col, COUNT(*) AS n FROM data GROUP BY col ORDER BY n DESC LIMIT 5;
 5. Flag discrepancies >10% between sources
 6. Produce reconciliation table
 
+## Content Performance Analysis
+
+Extended workflow for analyzing content flywheel metrics. References the `content-flywheel-analytics` skill for benchmark thresholds and decision matrix.
+
+### Standard content performance workflow
+1. Ingest post-level metrics (views, saves, shares, likes, comments at 24h and 7d marks)
+2. Compute per-post: save_rate, share_rate, engagement_rate using metric definitions above
+3. Compute per-format: average rates, post count — rank formats by share_rate (primary metric)
+4. Track week-over-week trends: rolling 7-day averages, flag inflection points (direction change >20%)
+5. Compare against benchmarks from `content-flywheel-analytics` skill (share rate >0.3% working, >0.5% strong; save rate >3% good, >5% elite)
+6. Apply decision matrix: TikTok <2K avg views after 8 weeks → format change; no posts >10K views → hook change; one platform dominant → double down
+7. Track follower growth against 12-week targets by platform
+
+### Output format
+Publish structured JSONL artifact with:
+- Per-post metric lines (type: "metric")
+- Per-format summary lines (type: "summary")  
+- Trend lines with week-over-week deltas
+- Decision matrix triggers (which conditions fired, with supporting data)
+
 ## Output Format Conventions
 
 JSONL dataset artifacts — one JSON object per line, each line self-contained.
