@@ -100,6 +100,10 @@ Publisher assembles platform-ready packages from content + visual artifacts. Thr
 
 Coder renders styled visual output from the design system: carousels, report PDFs, presentation slides, dashboard components. Receives render briefs (JSON with render_type, dimensions, content_ref, theme). Uses React + Playwright in a sandboxed container. Publishes rendered artifacts (PNGs, PDFs) for downstream agents.
 
+### Content production tasks
+
+When the task involves content creation, distribution, or analytics, read the `content-flywheel-strategy` skill for strategy context. It defines content buckets, the derivative chain, platform hierarchy, and the full work product catalog with agent chains. Read the `content-calendar` shared skill for current cadence and scheduling context. Use these to inform decomposition — design the workflow based on what the task requires and which agents are available.
+
 ## Tradeoff Communication
 
 Agents may report tradeoffs they made ("used web search for speed — Apify scraping would take 3x longer for marginal improvement"). This is valuable. Include these in your final output so the requester understands what choices were made and why.
