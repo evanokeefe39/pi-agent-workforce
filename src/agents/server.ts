@@ -45,6 +45,8 @@ const ARTIFACT_SERVICE_URL = process.env.ARTIFACT_SERVICE_URL || "";
 
 let piProvider = "unknown";
 let piModel = "unknown";
+let otelApi: any = null;
+let tracer: any = null;
 try {
   const settings = JSON.parse(readFileSync("/root/.pi/agent/settings.json", "utf-8"));
   piProvider = settings.defaultProvider || "unknown";
@@ -185,14 +187,14 @@ function extractPrompt(body: any): string {
 
 // --- Process a single invocation ---
 
-async function processInvocation(body: any, traceId: string, requestStart: number, abortController: AbortController) {
-  const run = runs.get(traceId);
+async function processInvocation(body: any, requestId: string, requestStart: number, abortController: AbortController) {
+  const run = runs.get(requestId);
   if (!run || run.status === "cancelled") {
     releaseSlot();
     return;
   }
 
-  trackRun(traceId, { status: "running", sessionDir: null });
+  trackRun(requestId, { status: "running", sessionDir: null });
 
   const ctx = body.context || {};
   const runId = body.runId || null;
@@ -211,7 +213,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
   const prompt = extractPrompt(body);
 
   // Session-scoped working directory — each invocation gets its own sandbox
-  const sessionDir = `${SESSIONS_ROOT}/${traceId}`;
+  const sessionDir = `${SESSIONS_ROOT}/${requestId}`;
   try {
     mkdirSync(`${sessionDir}/workproduct`, { recursive: true });
     mkdirSync(`${sessionDir}/output`, { recursive: true });
@@ -233,8 +235,8 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
     session = result.session;
   } catch (err: any) {
     metrics.requests_failed++;
-    log("error", "session_create_failed", { error: err.message, trace_id: traceId });
-    trackRun(traceId, { status: "failed", completedAt: new Date().toISOString(), error: err.message });
+    log("error", "session_create_failed", { error: err.message, request_id: requestId });
+    trackRun(requestId, { status: "failed", completedAt: new Date().toISOString(), error: err.message });
     metrics.requests_active--;
     releaseSlot();
     return;
@@ -242,8 +244,8 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
 
   const sessionId = session.sessionId;
   await session.bindExtensions({});
-  trackRun(traceId, { sessionDir });
-  log("info", "session_created", { session_id: sessionId, session_dir: sessionDir, trace_id: traceId, correlation_id: body.correlationId || null });
+  trackRun(requestId, { sessionDir });
+  log("info", "session_created", { session_id: sessionId, session_dir: sessionDir, request_id: requestId, correlation_id: body.correlationId || null });
 
   const usageByTurn: Array<{ provider: string; model: string; input: number; output: number; cacheRead: number }> = [];
   const toolCalls: Record<string, number> = {};
@@ -271,23 +273,23 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
         cacheRead: event.message.usage.cacheRead || 0,
       });
       const turnCount = usageByTurn.length;
-      trackRun(traceId, { turnCount });
+      trackRun(requestId, { turnCount });
 
       const maxCheck = checkMaxTurns(validationConfig, turnCount);
       if (!maxCheck.pass) {
-        log("error", "andon_max_turns", { trace_id: traceId, turns: turnCount, limit: validationConfig.maxTurns });
+        log("error", "andon_max_turns", { request_id: requestId, turns: turnCount, limit: validationConfig.maxTurns });
         abortController.abort();
       }
 
       const midCheck = checkMidRunTools(validationConfig, toolCalls, turnCount);
       for (const w of midCheck.warnings) {
-        log("warn", "andon_missing_tools", { trace_id: traceId, turns: turnCount, detail: w, toolCalls });
+        log("warn", "andon_missing_tools", { request_id: requestId, turns: turnCount, detail: w, toolCalls });
       }
     }
   }
 
   session.subscribe(handleSessionEvent);
-  log("info", "prompt_sent", { prompt_length: prompt.length, trace_id: traceId });
+  log("info", "prompt_sent", { prompt_length: prompt.length, request_id: requestId });
 
   let promptSuccess = false;
 
@@ -316,25 +318,25 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
 
       if (isTimeout || isCancelled || !isSdkMessageBug) {
         metrics.requests_failed++;
-        log(isCancelled ? "info" : "error", "prompt_failed", { error: err.message, trace_id: traceId });
-        trackRun(traceId, {
+        log(isCancelled ? "info" : "error", "prompt_failed", { error: err.message, request_id: requestId });
+        trackRun(requestId, {
           status: isCancelled ? "cancelled" : isTimeout ? "timeout" : "failed",
           completedAt: new Date().toISOString(),
           error: err.message,
         });
-        activeAborts.delete(traceId);
+        activeAborts.delete(requestId);
         metrics.requests_active--;
         releaseSlot();
         return;
       }
 
       log("warn", "sdk_message_role_error", {
-        trace_id: traceId, attempt, output_length: output.length, turns: usageByTurn.length, error: err.message,
+        request_id: requestId, attempt, output_length: output.length, turns: usageByTurn.length, error: err.message,
       });
 
       if (output.length > 0) {
         log("info", "degraded_success", {
-          trace_id: traceId, output_length: output.length, turns: usageByTurn.length,
+          request_id: requestId, output_length: output.length, turns: usageByTurn.length,
           detail: "subagents completed, planner crashed on continuation — returning captured output",
         });
         promptSuccess = true;
@@ -342,7 +344,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
       }
 
       if (attempt < MAX_PROMPT_RETRIES) {
-        log("info", "prompt_retry", { trace_id: traceId, next_attempt: attempt + 1 });
+        log("info", "prompt_retry", { request_id: requestId, next_attempt: attempt + 1 });
         try {
           const retryResult = await createAgentSession({
             cwd: sessionDir,
@@ -357,13 +359,13 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
           session = retryResult.session;
           session.subscribe(handleSessionEvent);
         } catch (sessionErr: any) {
-          log("error", "retry_session_failed", { trace_id: traceId, error: sessionErr.message });
+          log("error", "retry_session_failed", { request_id: requestId, error: sessionErr.message });
           metrics.requests_failed++;
-          trackRun(traceId, {
+          trackRun(requestId, {
             status: "failed", completedAt: new Date().toISOString(),
             error: `retry session failed: ${sessionErr.message} (original: ${err.message})`,
           });
-          activeAborts.delete(traceId);
+          activeAborts.delete(requestId);
           metrics.requests_active--;
           releaseSlot();
           return;
@@ -374,17 +376,17 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
 
   if (!promptSuccess) {
     metrics.requests_failed++;
-    log("error", "prompt_retries_exhausted", { trace_id: traceId, attempts: MAX_PROMPT_RETRIES });
-    trackRun(traceId, {
+    log("error", "prompt_retries_exhausted", { request_id: requestId, attempts: MAX_PROMPT_RETRIES });
+    trackRun(requestId, {
       status: "failed", completedAt: new Date().toISOString(),
       error: `SDK message role error after ${MAX_PROMPT_RETRIES} attempts`,
     });
-    activeAborts.delete(traceId);
+    activeAborts.delete(requestId);
     metrics.requests_active--;
     releaseSlot();
     return;
   }
-  activeAborts.delete(traceId);
+  activeAborts.delete(requestId);
 
   const totalDuration = Date.now() - requestStart;
   recordDuration(totalDuration);
@@ -404,7 +406,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
     output_length: output.length,
     event_count: eventCount,
     duration_ms: totalDuration,
-    trace_id: traceId,
+    request_id: requestId,
     usage,
   });
 
@@ -414,9 +416,9 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
   const validation = validateRun(validationConfig, toolCalls, usage);
   if (!validation.pass) {
     for (const err of validation.errors) {
-      log("error", "andon_validation_failed", { trace_id: traceId, error: err, toolCalls, turns: usage.turns });
+      log("error", "andon_validation_failed", { request_id: requestId, error: err, toolCalls, turns: usage.turns });
     }
-    trackRun(traceId, {
+    trackRun(requestId, {
       status: "failed", completedAt: new Date().toISOString(), output,
       usage, sessionId, error: validation.errors.join("; "),
     });
@@ -428,9 +430,9 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
   const repl = await waitForSession(sessionDir, REPLICATION_TIMEOUT_MS);
   if (!repl.ok) {
     log("error", "andon_replication_incomplete", {
-      trace_id: traceId, outstanding: repl.outstanding, session_dir: sessionDir,
+      request_id: requestId, outstanding: repl.outstanding, session_dir: sessionDir,
     });
-    trackRun(traceId, {
+    trackRun(requestId, {
       status: "failed", completedAt: new Date().toISOString(), output,
       usage, sessionId,
       error: `replication incomplete: ${repl.outstanding} files not synced to storage`,
@@ -439,7 +441,7 @@ async function processInvocation(body: any, traceId: string, requestStart: numbe
     return;
   }
 
-  trackRun(traceId, { status: "completed", completedAt: new Date().toISOString(), output, usage, sessionId });
+  trackRun(requestId, { status: "completed", completedAt: new Date().toISOString(), output, usage, sessionId });
   releaseSlot();
 }
 
@@ -562,7 +564,7 @@ app.post("/cancel/:runId", async (req, reply) => {
   if (abort) abort.abort();
   activeAborts.delete(runId);
   trackRun(runId, { status: "cancelled", completedAt: new Date().toISOString(), error: "cancelled by orchestrator" });
-  log("info", "run_cancelled", { trace_id: runId });
+  log("info", "run_cancelled", { request_id: runId });
   return { runId, state: "cancelled" };
 });
 
@@ -578,12 +580,12 @@ app.post("/invoke", async (req, reply) => {
   }
 
   const requestStart = Date.now();
-  const traceId = req.id;
+  const requestId = req.id;
   metrics.requests_total++;
   metrics.requests_active++;
   metrics.last_request_at = new Date().toISOString();
 
-  log("info", "request_received", { method: req.method, url: req.url, trace_id: traceId });
+  log("info", "request_received", { method: req.method, url: req.url, request_id: requestId });
 
   if (activeCount >= MAX_CONCURRENT && waitQueue.length >= QUEUE_MAX_DEPTH) {
     metrics.requests_active--;
@@ -592,47 +594,84 @@ app.post("/invoke", async (req, reply) => {
   }
 
   const body = req.body as any;
-  const correlationId = body.correlationId || traceId;
-  const traceparent = body.traceparent || null;
+  const correlationId = body.correlationId || requestId;
+
+  // Extract OTel trace context from incoming HTTP headers
+  let parentCtx: any = null;
+  let invokeSpan: any = null;
+  if (otelApi && tracer) {
+    parentCtx = otelApi.propagation.extract(otelApi.context.active(), req.headers);
+    invokeSpan = tracer.startSpan(`${AGENT_NAME} invoke`, {
+      kind: otelApi.SpanKind.SERVER,
+      attributes: {
+        "http.method": "POST",
+        "http.url": "/invoke",
+        "agent.name": AGENT_NAME,
+        "request.id": requestId,
+      },
+    }, parentCtx);
+  }
 
   const abortController = new AbortController();
-  activeAborts.set(traceId, abortController);
+  activeAborts.set(requestId, abortController);
 
-  trackRun(traceId, {
+  trackRun(requestId, {
     status: "queued",
     startedAt: new Date().toISOString(),
     startedAtMs: Date.now(),
     wakeReason: body.context?.wakeReason || "heartbeat",
     correlationId,
-    traceparent,
     output: null,
     error: null,
     usage: null,
     turnCount: 0,
   });
 
-  log("info", "request_accepted", { trace_id: traceId, correlation_id: correlationId, traceparent });
+  log("info", "request_accepted", { request_id: requestId, correlation_id: correlationId });
 
   reply
     .code(202)
-    .header("x-request-id", traceId)
-    .send({ runId: traceId, status: "accepted" });
+    .header("x-request-id", requestId)
+    .send({ runId: requestId, status: "accepted" });
 
-  acquireSlot()
-    .then(() => processInvocation(body, traceId, requestStart, abortController))
-    .catch((err) => {
-      log("error", "invocation_failed", { trace_id: traceId, error: (err as Error).message });
+  const invokeCtx = invokeSpan && otelApi
+    ? otelApi.trace.setSpan(parentCtx, invokeSpan)
+    : null;
+
+  const runInvocation = async () => {
+    try {
+      await acquireSlot();
+      await processInvocation(body, requestId, requestStart, abortController);
+    } catch (err) {
+      log("error", "invocation_failed", { request_id: requestId, error: (err as Error).message });
       metrics.requests_active--;
       metrics.requests_failed++;
-      activeAborts.delete(traceId);
-      trackRun(traceId, { status: "failed", completedAt: new Date().toISOString(), error: (err as Error).message });
+      activeAborts.delete(requestId);
+      trackRun(requestId, { status: "failed", completedAt: new Date().toISOString(), error: (err as Error).message });
       releaseSlot();
-    });
+      if (invokeSpan && otelApi) {
+        invokeSpan.setStatus({ code: otelApi.SpanStatusCode.ERROR, message: (err as Error).message });
+      }
+    } finally {
+      if (invokeSpan) invokeSpan.end();
+    }
+  };
+
+  if (invokeCtx && otelApi) {
+    otelApi.context.with(invokeCtx, runInvocation);
+  } else {
+    runInvocation();
+  }
 });
 
 // --- Startup ---
 
 const start = async () => {
+  try {
+    otelApi = await import("@opentelemetry/api");
+    tracer = otelApi.trace.getTracer("agent-server");
+  } catch { /* @opentelemetry/api not available — hooks will no-op */ }
+
   log("info", "server_start", { port: PORT, provider: piProvider, model: piModel, version: VERSION });
 
   try {

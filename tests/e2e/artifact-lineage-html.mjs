@@ -39,8 +39,8 @@ function parseLogLines(logs) {
 
 function findPlannerSession(traceId) {
   const logs = parseLogLines(containerLogs("pi-agent-workforce-planner-1"));
-  const session = logs.find(e => e.event === "session_created" && e.trace_id === traceId);
-  const complete = logs.find(e => e.event === "request_complete" && e.trace_id === traceId);
+  const session = logs.find(e => e.event === "session_created" && e.request_id === traceId);
+  const complete = logs.find(e => e.event === "request_complete" && e.request_id === traceId);
   return {
     traceId, sessionId: session?.session_id || null,
     duration: complete?.duration_ms || null, turns: complete?.usage?.turns || null,
@@ -52,7 +52,7 @@ function findLatestPlannerTrace() {
   const logs = parseLogLines(containerLogs("pi-agent-workforce-planner-1"));
   const accepts = logs.filter(e => e.event === "request_accepted");
   if (!accepts.length) throw new Error("No planner runs found");
-  return accepts[accepts.length - 1].trace_id;
+  return accepts[accepts.length - 1].request_id;
 }
 
 function findCorrelatedRuns(plannerSessionId) {
@@ -66,9 +66,9 @@ function findCorrelatedRuns(plannerSessionId) {
     const logs = parseLogLines(containerLogs(container));
     for (const entry of logs) {
       if (entry.event === "request_accepted" && entry.correlation_id === plannerSessionId) {
-        const tid = entry.trace_id;
-        const complete = logs.find(e => e.event === "request_complete" && e.trace_id === tid);
-        const sess = logs.find(e => e.event === "session_created" && e.trace_id === tid);
+        const tid = entry.request_id;
+        const complete = logs.find(e => e.event === "request_complete" && e.request_id === tid);
+        const sess = logs.find(e => e.event === "session_created" && e.request_id === tid);
         runs.push({
           agent: agentName, traceId: tid, runId: sess?.session_id || null,
           duration: complete?.duration_ms || null, turns: complete?.usage?.turns || null,

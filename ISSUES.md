@@ -238,6 +238,76 @@ Why 5: The retry logic assumes the error message is the ONLY assistant message a
 
 ---
 
+## OPEN: Server invoke span not exported to collector
+
+**Status:** Investigating
+**Severity:** Low — trace propagation works without it, this is cosmetic
+
+**Problem:** server.ts creates a span via `tracer.startSpan("${AGENT_NAME} invoke", ...)` in the /invoke route handler. Pi-otel's spans (pi.interaction, pi.turn, pi.llm_request) correctly inherit the trace context from our `context.with()` wrapper. But the server span itself never appears in OpenObserve.
+
+**What works:** traceparent header extraction, context propagation to pi-otel, pi.interaction correctly parents under the injected span ID. The full cross-agent trace chain connects.
+
+**What doesn't:** the server invoke span is invisible — it doesn't land in the collector/OpenObserve.
+
+**Likely cause:** ProxyTracer timing. `trace.getTracer("agent-server")` is called in `start()` before pi-otel's `sdk.start()` (which happens during first request's `bindExtensions()`). The ProxyTracer returns NoOpSpan for the first request. By the second request the ProxyTracer is upgraded, but the span may still not export because it goes through a different code path than pi-otel's BatchSpanProcessor, or the BatchSpanProcessor hasn't flushed before the process exits/restarts.
+
+**Next steps:**
+- Move tracer initialization to after first `bindExtensions()` call
+- Or create the tracer lazily on first use (after pi-otel has initialized)
+- Verify with a third request and explicit flush delay
+
+---
+
+## OPEN: Pi SDK runtime npm install causes 3-4 minute startup delay
+
+**Status:** Known, not a regression
+**Severity:** Medium — slows container startup, causes Docker healthcheck failures
+
+**Problem:** `createAgentSessionServices()` (Pi SDK) runs npm install at startup to resolve extension dependencies. Takes ~225s, dominated by a single `npm install` that removes 129 packages and adds 2 (3 minutes). This happens despite `pi extensions install` running at Docker build time.
+
+**Evidence:**
+```
+added 2 packages, removed 129 packages, and audited 89 packages in 3m
+added 6 packages, and audited 95 packages in 7s
+added 2 packages, and audited 97 packages in 3s
+```
+
+**Impact:** Docker healthcheck (start_period: 15s) marks containers unhealthy before SDK init completes. Dependent containers (planner depends on researcher/writer/publisher) fail to start on first attempt, requiring manual `docker compose up -d planner` after workers are healthy.
+
+**Not a regression:** This behavior predates the OTel trace propagation changes. The Pi SDK resolves at runtime, not just build time.
+
+**Possible mitigations:**
+- Increase healthcheck start_period to 300s
+- Pre-warm the npm cache at build time
+- Investigate why `pi extensions install` at build time doesn't prevent runtime re-resolution
+
+---
+
+## OPEN: Agent-to-user escalation over HTTP — AskUserQuestion equivalent
+
+**Status:** Not started
+**Severity:** Medium — blocks interactive use cases where agents need human input mid-run
+
+**Problem:** Agents running as HTTP services have no mechanism to ask the user a question or request permission during execution. In interactive pi CLI, tools like `AskUserQuestion` pause and prompt the user. Over HTTP (POST /invoke → 202 → poll), the agent runs asynchronously with no back-channel to the caller.
+
+**Use cases:**
+- Agent encounters ambiguity and wants clarification before proceeding
+- Agent wants permission before an expensive or destructive operation
+- Quality gate where human approval is needed mid-pipeline (e.g., publisher HITL)
+
+**Considerations:**
+- The /invoke HTTP protocol is fire-and-forget with polling — no bidirectional channel
+- Options: WebSocket upgrade, long-poll on a /questions endpoint, queue-and-wait pattern where agent blocks until answer arrives via a separate POST
+- Must work for both interactive (host pi agent as caller) and deployed (planner as caller) scenarios
+- When host pi agent is the caller, could bridge back to pi CLI's native AskUserQuestion
+
+**Next steps:**
+- Design the escalation protocol (HTTP endpoint shape, timeout behavior, what happens if no one answers)
+- Determine how pi-otel spans should represent blocked-on-human time
+- Prototype with a simple /questions/:runId endpoint
+
+---
+
 ## PARTIALLY RESOLVED: Session isolation and artifact replication architecture
 
 **Status:** Core implementation done, tested. Remaining: session cleanup, docker-compose sysctls.

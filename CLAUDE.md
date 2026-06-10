@@ -59,7 +59,7 @@ All agents: DeepSeek V4 Flash ($0.10/M). V4 Pro demoted to plan/review fallback 
 
 ## Session isolation
 
-Each invocation gets `/workspace/sessions/{traceId}/` with `output/`, `workproduct/`, `scratch/` subdirs. server.ts calls `createAgentSession` (not `createAgentSessionFromServices`) with `cwd: sessionDir` and `sessionStartEvent`, then calls `await session.bindExtensions({})` to fire extension lifecycle hooks (required for pi-otel OTel initialization). Extensions write `.meta.json` sidecars alongside files. Replicator (`replicator.ts`) watches for sidecars via `fs.watch` and uploads to MinIO. Agent-complete gate waits for replication before marking run done.
+Each invocation gets `/workspace/sessions/{requestId}/` with `output/`, `workproduct/`, `scratch/` subdirs. server.ts calls `createAgentSession` (not `createAgentSessionFromServices`) with `cwd: sessionDir` and `sessionStartEvent`, then calls `await session.bindExtensions({})` to fire extension lifecycle hooks (required for pi-otel OTel initialization). Extensions write `.meta.json` sidecars alongside files. Replicator (`replicator.ts`) watches for sidecars via `fs.watch` and uploads to MinIO. Agent-complete gate waits for replication before marking run done.
 
 ## Jidoka (output validation)
 
