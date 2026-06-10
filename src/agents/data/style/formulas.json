@@ -118,5 +118,84 @@
       }
     ],
     "best_for": ["webinars", "long-form sales", "fundraising"]
+  },
+  {
+    "name": "kallaway",
+    "label": "Kallaway 7-Beat Narrative",
+    "steps": [
+      {
+        "name": "opening_superlative",
+        "purpose": "Declarative claim that stops the scroll",
+        "constraints": "1 sentence max, bold and specific, no rhetorical questions, no POV openers"
+      },
+      {
+        "name": "stakes",
+        "purpose": "Why this matters to the viewer",
+        "constraints": "1 sentence, connect to viewer's goals or fears, be specific"
+      },
+      {
+        "name": "pivot",
+        "purpose": "Transition that builds curiosity",
+        "constraints": "1 sentence, pattern: 'But here's the crazy part...' or equivalent pivot phrase"
+      },
+      {
+        "name": "explanation",
+        "purpose": "Linear narrative with causality — the core content",
+        "constraints": "4-7 sentences, MUST be narrative not list, each sentence causally links to the next, specificity required"
+      },
+      {
+        "name": "scale_proof",
+        "purpose": "Concrete evidence of impact or scale",
+        "constraints": "1 sentence, specific number or vivid analogy, never vague ('millions of people')"
+      },
+      {
+        "name": "wonder_close",
+        "purpose": "Light awe, forward implication",
+        "constraints": "1-2 sentences, leave viewer thinking about implications, no hard sell"
+      },
+      {
+        "name": "cta_stack",
+        "purpose": "Engagement hook + follow + hashtags",
+        "constraints": "Engagement CTA first (save/comment), then follow CTA, hashtags on separate line"
+      }
+    ],
+    "best_for": ["tiktok captions", "reel captions", "short-form narrative content"]
+  },
+  {
+    "name": "deep-post-generator",
+    "label": "Deep Post Generator (Dan Koe Method)",
+    "steps": [
+      {
+        "name": "idea_extraction",
+        "purpose": "Extract 5 compelling standalone post ideas from anchor content",
+        "constraints": "Each idea must work as an independent post, not just a section summary"
+      },
+      {
+        "name": "paradox_identification",
+        "purpose": "Identify 3 core paradoxes or counterintuitive truths",
+        "constraints": "Must genuinely challenge assumptions, not just restate as negative"
+      },
+      {
+        "name": "quotable_moments",
+        "purpose": "Pull key quotable moments from the anchor",
+        "constraints": "Must be specific and attributable, not generic wisdom"
+      },
+      {
+        "name": "transformation_arcs",
+        "purpose": "Map 3 transformation arcs (before → after)",
+        "constraints": "Each arc needs concrete before state and concrete after state with specifics"
+      },
+      {
+        "name": "pain_points",
+        "purpose": "Name core audience pain points addressed by the anchor",
+        "constraints": "Use audience's own language, be specific about the pain"
+      },
+      {
+        "name": "actionable_steps",
+        "purpose": "Derive 3 actionable steps from the anchor content",
+        "constraints": "Must be immediately actionable, not aspirational"
+      }
+    ],
+    "best_for": ["content decomposition", "building blocks for social posts", "anchor content mining"]
   }
 ]

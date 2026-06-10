@@ -1,0 +1,45 @@
+{
+  "name": "social-voice",
+  "label": "Social Voice Profile",
+  "description": "Voice profile for first-person social media content. Used with voice mode 'social' from brand guidelines.",
+  "tone": {
+    "formality": 0.4,
+    "enthusiasm": 0.6,
+    "humor": 0.2,
+    "irreverence": 0.2
+  },
+  "readability": {
+    "target_grade": 8,
+    "max_grade": 12
+  },
+  "rhythm": {
+    "burstiness_target": 0.65,
+    "min_sentence_words": 3,
+    "max_sentence_words": 35
+  },
+  "voice": {
+    "active_ratio": 0.90,
+    "first_person_allowed": true,
+    "perspective": "practitioner sharing experience"
+  },
+  "vocabulary": {
+    "inherit_default_blocklist": true,
+    "additional_blocked_words": [
+      "game-changing",
+      "revolutionary",
+      "unlock your potential",
+      "skyrocket your growth",
+      "level up",
+      "10x",
+      "crushing it",
+      "insane",
+      "mind-blowing",
+      "next level"
+    ]
+  },
+  "structure": {
+    "max_em_dashes_per_1000_words": 2,
+    "no_compulsive_summary": true,
+    "hook_required": true
+  }
+}

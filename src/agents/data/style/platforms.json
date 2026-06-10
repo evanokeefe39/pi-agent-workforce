@@ -80,5 +80,72 @@
       "Preview text should complement subject line, not repeat it",
       "Sign-off matches relationship formality"
     ]
+  },
+  "tiktok": {
+    "label": "TikTok",
+    "char_limit": 4000,
+    "visible_chars": 80,
+    "structure": "Hook in first 80 chars (visible before expand), narrative body (never listicle format in caption), hashtags on final line",
+    "tone": "Personal, specific, enthusiastic about the craft",
+    "paragraph_max_sentences": 3,
+    "cta": "Spoken CTA in video + written CTA in caption (save, comment keyword for DM)",
+    "video_duration_sweet_spot": "60-90s",
+    "rules": [
+      "First 80 chars are the hook — must work as standalone text",
+      "On-screen text indexed for search — caption complements, does not duplicate",
+      "Narrative structure required — never write caption as a bulleted list",
+      "3-5 hashtags on separate final line",
+      "Duration sweet spot 60-90s for resource content, 30-60s for demos"
+    ]
+  },
+  "instagram-reel": {
+    "label": "Instagram Reel",
+    "char_limit": 2200,
+    "visible_chars": 125,
+    "structure": "Keywords in first line (outperform hashtags for discovery), body with context, hashtags at end",
+    "tone": "Personal, specific, save-optimized",
+    "paragraph_max_sentences": 3,
+    "cta": "Save CTA in caption, comment CTA if using DM automation",
+    "rules": [
+      "First 125 chars visible without tap — front-load keywords here",
+      "Keywords in first line outperform hashtags for Instagram search",
+      "5 hashtag hard cap — every tag must earn its slot",
+      "Sends (DM shares) weigh more than likes in Instagram algorithm",
+      "Use Trial Reels at 1K+ followers to test with non-followers first"
+    ]
+  },
+  "instagram-carousel": {
+    "label": "Instagram Carousel",
+    "char_limit": 2200,
+    "slide_count": "2-20",
+    "structure": "First slide is hook (must work at thumbnail size), body slides deliver value, final slide is save/follow CTA",
+    "tone": "Informational, scannable, save-optimized",
+    "paragraph_max_sentences": 2,
+    "cta": "Final slide: save + follow CTA. Caption: keyword-rich summary.",
+    "dimensions": "1080x1350",
+    "rules": [
+      "First slide IS the hook — text must be readable at thumbnail size",
+      "5-10 slides optimal for listicle or comparison format",
+      "Final slide always includes save/follow CTA",
+      "Add music to push carousel into Reels feed",
+      "Save-optimized format — design for bookmarking, not just scrolling"
+    ]
+  },
+  "youtube-short": {
+    "label": "YouTube Short",
+    "char_limit": null,
+    "title_format": "How to [X] with [Y]",
+    "structure": "Searchable title in 'How to' format, evergreen framing, 60s max duration",
+    "tone": "Authoritative, tutorial-oriented, evergreen",
+    "paragraph_max_sentences": 3,
+    "cta": "Subscribe CTA, link to full video if applicable",
+    "max_duration_seconds": 60,
+    "rules": [
+      "Title must be searchable — 'How to [X] with [Y]' format preferred",
+      "Evergreen framing — avoid time-sensitive references",
+      "60s maximum duration (platform limit)",
+      "74% of Short views come from non-subscribers — optimize for discovery",
+      "Description supports SEO — include relevant keywords"
+    ]
   }
 }
