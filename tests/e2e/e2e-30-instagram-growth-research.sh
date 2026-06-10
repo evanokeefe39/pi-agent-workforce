@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # E2E-30: Instagram Growth Strategy Research (via Planner)
 # Sends goal to planner agent, which decomposes, delegates to researcher + writer,
-# and manages quality. Produces play-by-play + LLM-as-judge quality assessment.
+# and manages quality. Produces play-by-play report for interactive review.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -136,65 +136,6 @@ if [ -n "$FINDINGS_IDS" ]; then
   echo "    Unique domains: $UNIQUE_DOMAINS"
 fi
 
-# --- LLM-as-Judge quality assessment ---
-echo ""; echo "--- LLM-as-Judge Quality Assessment ---"
-
-JUDGE_RESULT=""
-if [ -n "$FINAL_REPORT_CONTENT" ] && [ "${#FINAL_REPORT_CONTENT}" -gt 100 ]; then
-  TRUNCATED_REPORT=$(echo "$FINAL_REPORT_CONTENT" | head -c 8000)
-  TRUNCATED_PLAN=$(echo "$PLANNER_OUTPUT" | head -c 2000)
-
-  JUDGE_PROMPT="You are a quality assessor. You will evaluate both the PLAN the planner agent communicated and the REPORT that was produced.
-
-=== PLANNER OUTPUT (what the coordinating agent said/decided) ===
-$TRUNCATED_PLAN
-
-=== FINAL REPORT (first 8000 chars of what was produced) ===
-$TRUNCATED_REPORT
-
-=== EVALUATION ===
-
-PART A — Plan Quality (1-10 each):
-1. PLAN SPECIFICITY — Did the planner articulate concrete requirements for delegation?
-2. PLAN COVERAGE — Did the planner identify the right dimensions to research for this goal?
-3. PLAN FEASIBILITY — Was the delegation realistic?
-
-PART B — Report Quality (1-10 each):
-4. ACTIONABILITY — Can someone execute on this immediately? Specific tactics, not vague advice?
-5. EVIDENCE QUALITY — Are claims backed by data, citations, or named examples?
-6. NICHE SPECIFICITY — Is this specific to faceless tech/AI content, or generic Instagram advice?
-7. COMPLETENESS — Does it cover formats, algorithm, growth tactics, monetization, tools, case studies?
-8. SOURCE DIVERSITY — Multiple source types (profiles, articles, case studies) or single-source?
-
-PART C — Plan vs Output Alignment:
-9. PLAN FULFILLMENT — Did the report deliver on what the plan required?
-10. EMERGENT VALUE — Did the report surface insights beyond what was requested?
-
-Output format (exactly):
-PLAN_SPECIFICITY: [1-10] — [one sentence]
-PLAN_COVERAGE: [1-10] — [one sentence]
-PLAN_FEASIBILITY: [1-10] — [one sentence]
-ACTIONABILITY: [1-10] — [one sentence]
-EVIDENCE: [1-10] — [one sentence]
-SPECIFICITY: [1-10] — [one sentence]
-COMPLETENESS: [1-10] — [one sentence]
-SOURCES: [1-10] — [one sentence]
-PLAN_FULFILLMENT: [1-10] — [one sentence]
-EMERGENT_VALUE: [1-10] — [one sentence]
-OVERALL: [1-10] — [one sentence verdict]
-STRONGEST: [what the system does best]
-WEAKEST: [biggest gap or improvement needed]
-PLAN_GAPS: [what the plan missed]
-EXECUTION_GAPS: [what was planned but not delivered]"
-
-  JUDGE_EVENTS=$(pi_run "$JUDGE_PROMPT" 120 judge)
-  JUDGE_RESULT=$(jsonl_all_text "$JUDGE_EVENTS")
-  echo "$JUDGE_RESULT"
-else
-  echo "  [SKIP] No report content to judge"
-  JUDGE_RESULT="No report produced — cannot assess quality"
-fi
-
 # --- Assertions ---
 echo ""; echo "--- Assertions ---"
 
@@ -278,11 +219,6 @@ By agent: researcher=$RESEARCHER_ARTS, writer=$WRITER_ARTS
 | Word count | $REPORT_WORD_COUNT | >= 500 |
 | Sections | $REPORT_SECTION_COUNT | >= 3 |
 | URL citations | $REPORT_CITATION_COUNT | — |
-
-## LLM-as-Judge Assessment
-\`\`\`
-$JUDGE_RESULT
-\`\`\`
 
 ## Planner Output
 <details>
