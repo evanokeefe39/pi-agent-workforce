@@ -4,7 +4,7 @@
   "title": "Quality Assurance",
   "icon": "shield",
   "reportsTo": "CEO",
-  "capabilities": "Content flywheel quality evaluation, severity-graded verdicts (exemplary to catastrophic), positive and negative vetting, structured JSONL workproduct, domain-specific audit (content quality, platform compliance, brand compliance, research quality, publish readiness)",
+  "capabilities": "Evaluative gating, branding checks, coding standards validation, kaizen integration",
   "adapterType": "http",
   "adapterConfig": {
     "url": "http://qa:8080/invoke",
@@ -12,10 +12,14 @@
   },
   "runtimeConfig": {
     "heartbeat": { "enabled": true, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 },
-    "validation": {
-      "maxTurns": 40,
-      "requiredTools": ["record_violation", "record_commendation", "write_artifact"],
-      "requiredArtifactType": "dataset"
+    "toolPolicy": {
+      "write": "block",
+      "edit": "block",
+      "record_violation": "allow",
+      "record_commendation": "allow",
+      "write_artifact": "allow",
+      "read": "allow",
+      "bash": "allow"
     }
   }
 }

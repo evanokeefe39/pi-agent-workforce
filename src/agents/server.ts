@@ -62,6 +62,7 @@ const logger = createLogger({ service: SERVICE_NAME });
 
 let agentMeta = { name: AGENT_NAME, description: "", role: "", capabilities: "" };
 let validationConfig: ValidationConfig = { maxTurns: 0, requiredTools: [], requiredArtifactType: "" };
+let toolPolicy: Record<string, string> = {};
 try {
   const raw = readFileSync(`/app/${AGENT_NAME}/agent.json`, "utf-8");
   const parsed = JSON.parse(raw);
@@ -77,6 +78,7 @@ try {
     requiredTools: v.requiredTools || [],
     requiredArtifactType: v.requiredArtifactType || "",
   };
+  toolPolicy = parsed.runtimeConfig?.toolPolicy || {};
 } catch { /* agent.json not found */ }
 
 function log(level: string, event: string, data: Record<string, unknown> = {}) {
@@ -228,6 +230,7 @@ async function processInvocation(body: any, requestId: string, requestStart: num
       agentName: AGENT_NAME,
       runId: requestId,
       marquezUrl: process.env.MARQUEZ_URL || null,
+      toolPolicy,
     };
     writeFileSync(
       `${sessionDir}/.provenance-context.json`,

@@ -16,6 +16,14 @@
       "maxTurns": 50,
       "requiredTools": ["write_artifact"],
       "requiredArtifactType": "report"
+    },
+    "toolPolicy": {
+      "write": "block",
+      "edit": "block",
+      "write_artifact": "allow",
+      "read": "allow",
+      "bash": "allow",
+      "web_search": "allow"
     }
   }
 }

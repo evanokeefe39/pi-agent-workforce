@@ -16,6 +16,17 @@
       "maxTurns": 60,
       "requiredTools": ["write_artifact", "record_query_result"],
       "requiredArtifactType": "dataset"
+    },
+    "toolPolicy": {
+      "write": "block",
+      "edit": "block",
+      "record_query_result": "allow",
+      "record_metric": "allow",
+      "record_chart": "allow",
+      "record_dataset_ref": "allow",
+      "write_artifact": "allow",
+      "read": "allow",
+      "bash": "allow"
     }
   }
 }

@@ -11,6 +11,11 @@
     "timeoutSec": 900
   },
   "runtimeConfig": {
-    "heartbeat": { "enabled": false, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 1 }
+    "heartbeat": { "enabled": false, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 1 },
+    "toolPolicy": {
+      "read": "allow",
+      "bash": "allow",
+      "subagent": "allow"
+    }
   }
 }
