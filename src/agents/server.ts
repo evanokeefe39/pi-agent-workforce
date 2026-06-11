@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createLogger } from "./logger.mjs";
 import {
   createAgentSessionServices,
@@ -219,6 +219,21 @@ async function processInvocation(body: any, requestId: string, requestStart: num
     mkdirSync(`${sessionDir}/output`, { recursive: true });
     mkdirSync(`${sessionDir}/scratch`, { recursive: true });
   } catch { /* non-fatal */ }
+
+  // Provenance context for OpenLineage extension
+  try {
+    const provenanceCtx = {
+      correlationId: body.correlationId || requestId,
+      causationId: body.correlationId || null,
+      agentName: AGENT_NAME,
+      runId: requestId,
+      marquezUrl: process.env.MARQUEZ_URL || null,
+    };
+    writeFileSync(
+      `${sessionDir}/.provenance-context.json`,
+      JSON.stringify(provenanceCtx),
+    );
+  } catch { /* non-fatal — provenance extension will gracefully degrade */ }
 
   let session: any;
   try {

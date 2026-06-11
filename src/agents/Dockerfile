@@ -16,6 +16,7 @@ COPY extensions/duckdb/ /root/.pi/agent/extensions/duckdb/
 COPY extensions/web-fetch.ts /root/.pi/agent/extensions/web-fetch.ts
 COPY extensions/web-scrape/ /root/.pi/agent/extensions/web-scrape/
 COPY extensions/web-search.ts /root/.pi/agent/extensions/web-search.ts
+COPY extensions/provenance/ /root/.pi/agent/extensions/provenance/
 COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
 RUN pi extensions install || true
@@ -45,6 +46,7 @@ RUN bun install --production
 COPY server.ts logger.mjs jidoka.ts replicator.ts artifact-store.ts ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/subagent-http/ /root/.pi/agent/extensions/subagent-http/
+COPY extensions/provenance/ /root/.pi/agent/extensions/provenance/
 RUN cd /root/.pi/agent/extensions/subagent-http && npm install --omit=dev 2>/dev/null || true
 COPY planner/.pi/agent/ /root/.pi/agent/
 COPY planner/agent.json /app/planner/agent.json

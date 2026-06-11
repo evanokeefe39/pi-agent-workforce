@@ -76,6 +76,8 @@ export function buildRunEvent(opts: BuildRunEventOpts): RunEvent {
   // Include correlation facet only when correlationId is present
   if (opts.correlationId) {
     runFacets.piAgent_correlation = {
+      _producer: PRODUCER,
+      _schemaURL: `${SCHEMA_URL}#/definitions/piAgent_correlationFacet`,
       correlationId: opts.correlationId,
       causationId: opts.causationId || null,
       agentName: opts.agentName,
