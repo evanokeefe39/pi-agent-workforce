@@ -162,13 +162,15 @@ Before merging:
 - [ ] ISSUES.md updated if resolving an issue
 - [ ] tasks/lessons.md updated if a correction was made
 
-## CI
+## Pre-merge Validation
 
-GitHub Actions runs on push/PR to master:
+Run `scripts/check.sh` before creating a PR or merging to master.
 
-- `bun test tests/unit/` — unit tests (~1s)
-- Static E2E tests (e2e-50, e2e-53, e2e-55) — config validation (~5s)
-- TypeScript type checking
-- Skips on docs-only changes
+```bash
+bash scripts/check.sh          # fast checks only (~10s, no containers)
+bash scripts/check.sh --live   # includes live E2E tests (requires Docker)
+```
 
-Live E2E tests (requiring Docker containers) run manually before merge — CI does not spin up the full agent stack.
+Fast checks: unit tests (81) + static E2E (72). Live checks add coder rendering (15) and QA pipeline (6).
+
+All fast checks must pass before merge. Live checks should pass when the PR touches agent code, Docker config, or extensions.
