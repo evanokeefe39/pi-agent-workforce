@@ -141,6 +141,48 @@ services:
         limits:
           memory: 128M
 
+  marquez-api:
+    image: marquezproject/marquez:latest
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+      - "5001:5001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: marquez
+      POSTGRES_USER: marquez
+      POSTGRES_PASSWORD: marquez
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/v1/namespaces"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  marquez-web:
+    image: marquezproject/marquez-web:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    depends_on:
+      marquez-api:
+        condition: service_healthy
+    environment:
+      MARQUEZ_HOST: marquez-api
+      MARQUEZ_PORT: "5000"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
   planner:
     <<: *agent
     build:
@@ -155,6 +197,7 @@ services:
       AGENT_NAME: "planner"
       WORKSPACE: "default"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      MARQUEZ_URL: "http://marquez-api:5000"
       BRIDGE_TIMEOUT_MS: "1800000"
       MAX_CONCURRENT_SESSIONS: "1"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
@@ -184,6 +227,7 @@ services:
       NVIDIA_NIM_API_KEY: "${NVIDIA_NIM_API_KEY}"
       FINDING_STYLE: "intelligence"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      MARQUEZ_URL: "http://marquez-api:5000"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "3"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
@@ -210,6 +254,7 @@ services:
       NVIDIA_NIM_API_KEY: "${NVIDIA_NIM_API_KEY}"
       FINDING_STYLE: "data"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      MARQUEZ_URL: "http://marquez-api:5000"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
@@ -238,6 +283,7 @@ services:
       AGENT_NAME: "writer"
       WORKSPACE: "default"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      MARQUEZ_URL: "http://marquez-api:5000"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
@@ -265,6 +311,7 @@ services:
       AGENT_NAME: "publisher"
       WORKSPACE: "default"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      MARQUEZ_URL: "http://marquez-api:5000"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
@@ -288,6 +335,7 @@ services:
       AGENT_NAME: "coder"
       WORKSPACE: "default"
       ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      MARQUEZ_URL: "http://marquez-api:5000"
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"

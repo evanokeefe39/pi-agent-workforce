@@ -88,3 +88,26 @@ CREATE INDEX IF NOT EXISTS idx_edges_type ON artifact_edges(edge_type);
 GRANT ALL PRIVILEGES ON DATABASE artifact_store TO artifact;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO artifact;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO artifact;
+
+-- =========================================================================
+-- Marquez lineage database
+-- =========================================================================
+
+\connect postgres
+
+SELECT 'CREATE DATABASE marquez'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'marquez')\gexec
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'marquez') THEN
+        CREATE ROLE marquez WITH LOGIN PASSWORD 'marquez';
+    END IF;
+END
+$$;
+
+GRANT ALL PRIVILEGES ON DATABASE marquez TO marquez;
+
+\connect marquez
+GRANT ALL PRIVILEGES ON SCHEMA public TO marquez;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO marquez;
