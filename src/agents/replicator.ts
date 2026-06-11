@@ -20,7 +20,6 @@ interface SidecarContent {
   content_hash: string;
   size_bytes: number;
   mime_type: string;
-  lineage: { inputs: string[]; method: string };
   tags: string[];
 }
 
@@ -157,7 +156,6 @@ async function replicateFile(metaPath: string): Promise<boolean> {
       run_id: meta.session_id,
       mime: meta.mime_type,
       metadata: {
-        lineage: meta.lineage,
         tags: meta.tags,
         replicated_from: relative(SESSIONS_ROOT, artifactPath),
         replicated_at: new Date().toISOString(),
