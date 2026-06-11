@@ -19,6 +19,7 @@ COPY extensions/web-search.ts /root/.pi/agent/extensions/web-search.ts
 COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
 RUN pi extensions install || true
+RUN pi extensions list 2>/dev/null | head -30 || true
 RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && \
     npm install @tintinweb/pi-tasks pi-subagents pi-otel pi-permission-system --legacy-peer-deps 2>&1 || true
 ENV PI_OFFLINE=1
@@ -69,7 +70,7 @@ COPY ceo/agent.json /app/ceo/agent.json
 # ============================================================
 FROM base AS coder-deps
 RUN apt-get update && apt-get install -y --no-install-recommends chromium && rm -rf /var/lib/apt/lists/*
-RUN npm init -y && npm install playwright-core react react-dom tailwindcss @tailwindcss/cli
+RUN npm init -y && npm install playwright-core react react-dom tailwindcss @tailwindcss/cli esbuild
 
 FROM coder-deps AS coder
 COPY coder/.pi/agent/ /root/.pi/agent/
@@ -81,6 +82,8 @@ FROM base AS qa
 COPY qa/.pi/agent/ /root/.pi/agent/
 COPY qa/agent.json /app/qa/agent.json
 COPY skills/brand-guidelines/ /root/.pi/agent/skills/brand-guidelines/
+COPY skills/platform-formats/ /root/.pi/agent/skills/platform-formats/
+COPY skills/content-calendar/ /root/.pi/agent/skills/content-calendar/
 
 FROM base AS publisher
 COPY publisher/.pi/agent/ /root/.pi/agent/

@@ -135,6 +135,18 @@ Track save rate as your primary quality signal.
 #AIContent #CreatorAnalytics #SaveRate
 ```
 
+### Voice Modes
+
+Different content contexts require different voice registers. The mode determines which voice rules apply.
+
+| Mode | Context | Rules |
+|------|---------|-------|
+| `analytical` | Reports, research summaries, data analysis | Third-person. "Analysis showed." No first-person singular. Current default for all non-social content. |
+| `social` | Social media captions, X threads, video outlines | First-person permitted. "I built X." Personal, specific, honest. Load social-voice-profile.json for mechanical parameters. |
+| `brief` | Internal briefs, render briefs, task specs | Neutral imperative. "Produce a 10-slide carousel." No personality, just clear instructions. |
+
+The anti-patterns in "What the brand does NOT sound like" (no first-person singular, no rhetorical questions as hooks) apply to `analytical` mode only. Social mode permits first-person and uses hook formulas that may include questions. Brief mode has no voice personality constraints.
+
 ## Visual Identity Patterns
 
 ### Card Style

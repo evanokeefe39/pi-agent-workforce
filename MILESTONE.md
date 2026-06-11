@@ -213,3 +213,24 @@ E2E-60 checks quality, not just pass/fail. Key quality gates:
 ### Status
 
 Not started.
+
+---
+
+## R1: Provenance and Artifact Architecture Refactor
+
+Replace tangled artifact/provenance system with industry-standard OpenLineage + Marquez.
+Separates event capture, blob storage, metadata, lineage, and discovery into independent
+layers. Introduces per-agent tool policies for workproduct enforcement.
+
+Spec: `tasks/specs/provenance-and-artifact-architecture.md`
+
+### Phases
+
+1. Marquez + provenance extension (parallel with existing system, no breaking changes)
+2. Per-agent tool policy enforcement (block native write on researcher/writer/data/QA)
+3. Remove old system (write_artifact, .meta.json sidecars, graph.ts, lineage-ui, readLog)
+4. Extend (more tool classifications, column-level lineage, temporal queries)
+
+### Status
+
+Spec complete. Roadmapped for next feature cycle after content flywheel branch lands.

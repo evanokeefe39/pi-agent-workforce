@@ -51,6 +51,12 @@
     "query_assessments": "allow",
     "get_assessment": "allow",
 
+    // Evaluations — violations and commendations
+    "record_violation": "allow",
+    "record_commendation": "allow",
+    "list_evaluations": "allow",
+    "export_evaluations_jsonl": "allow",
+
     // Findings
     "record_finding": "allow",
     "list_findings": "allow",

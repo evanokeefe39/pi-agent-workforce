@@ -19,8 +19,8 @@ and platform algorithm research current to June 2026.
 
 ## Pre-Publish Checklist
 
-Run every item before confirming publish. If any fails, return to content
-creator (Writer agent) for revision.
+Run every item before confirming publish. If any item fails, the content
+is not ready for publishing — flag the specific failure.
 
 - [ ] **Saveable?** Can you articulate why someone would save this post?
       If not, the post should not be published.
@@ -101,21 +101,33 @@ Every tag slot must earn its place:
 
 Keywords in caption first line now outperform hashtags for discoverability.
 
-## Posting Schedule
+## Content Recycling Rules
 
-### Optimal times
-Monday-Friday, 9 AM-12 PM in target audience timezone.
-Tuesday-Thursday tend highest engagement.
-Personalize using platform analytics after 2 weeks of data.
+Tag any post hitting >10K views as RECYCLE-[original date] in artifact metadata.
 
-### Frequency targets by growth stage
+### Repost schedule
+- 6 months from original: first repost
+- 12 months: second repost
+- 18 months: third repost
+- 24 months: final repost
 
-| Stage | TikTok | Instagram |
-|-------|--------|-----------|
-| 0-1K followers | 1 Reel/day | 1 Reel/day + 1 carousel/week |
-| 1K-5K | 1 Reel/day | 1 Reel/day + 2 carousels/week |
-| 5K-10K | 5 Reels/week | 5 Reels/week + 2 carousels/week |
-| 10K+ | 4-5 Reels/week | 4-5 Reels/week + 1-2 carousels/week |
+### Platform-specific recycling
+- **TikTok**: natively re-upload with refreshed caption, same video file
+- **X**: quote-tweet original with updated commentary
+- **Instagram**: 10+ reposts in 30 days = excluded from recommendations (platform penalty). Space reposts accordingly.
+
+## Multi-Account Strategy
+
+Activate after first 50K+ view post. Scheduling tool config: see `config/vendors.yaml`.
+
+### Setup
+- Create second X account focused on specific sub-niche
+- Sunday: identify best video from past week, schedule repost 7 days later on second account
+- Viral videos continue reposting weekly for rest of year
+
+### Scale guidelines
+- 2 accounts: manageable solo
+- 3-5 accounts: requires scheduling system (see vendors.yaml for provider)
 
 ## Cross-Posting Rules
 
@@ -136,24 +148,21 @@ Personalize using platform analytics after 2 weeks of data.
 - Platform-specific trends (sounds, challenges) that won't translate
 - Content referencing TikTok-specific features ("link in bio" phrasing differs)
 
-## Post-Publish Actions
+## Post-Publish Domain Knowledge
 
-### First 60 minutes (critical engagement window)
-1. Respond to every comment within 60 minutes of posting
-2. Pin a comment that adds value or asks a question
-3. Post 3-5 Stories referencing the new post (polls, reactions)
-4. Engage with 5-10 niche accounts (genuine comments, not spam)
+### First 60 minutes matter
+Platform algorithms weight early engagement signals heavily. Comments within the first 60 minutes, pinned value-add comments, and Story cross-references all amplify initial distribution. Engagement with 5-10 niche accounts (genuine, not spam) signals community participation to the algorithm.
 
-### Daily tracking
-Record for each post (for the daily tracker pipeline):
-- Views, saves, shares, likes, comments at 24h and 7d
-- Save rate = saves/views * 100
-- Any DM triggers received
+### Metrics to capture
+For each published post, these metrics are needed at 24h and 7d marks:
+- Views, saves, shares, likes, comments
+- Computed: save_rate = saves/views * 100
+- DM triggers received (if CTA was comment-to-DM)
 
-### Weekly review
-- Which post got highest save rate? Produce more of that format.
-- Which post got lowest? Diagnose: wrong hook? Wrong duration? Off-niche?
-- Compare against benchmarks: good = 3%+, elite = 5%+ save rate
+### Performance signals
+- Highest save rate post → produce more of that format
+- Lowest save rate post → diagnose: wrong hook? Wrong duration? Off-niche?
+- Benchmarks: good = 3%+, elite = 5%+ save rate (see content-flywheel-analytics skill for full thresholds)
 
 ## Anti-Patterns at Publish Time
 

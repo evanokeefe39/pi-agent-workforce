@@ -72,7 +72,7 @@ Each invocation gets `/workspace/sessions/{requestId}/` with `output/`, `workpro
 
 ## Ports
 
-Planner :8081, Researcher :8082, Data :8083, Writer :8084, Publisher :8085, Coder :8086, Artifacts :8090, Postgres :5432, MinIO :9000/:9001, OpenObserve :5080, OTel Collector :4317 (gRPC) / :4318 (HTTP)
+Planner :8081, Researcher :8082, Data :8083, Writer :8084, Publisher :8085, Coder :8086, QA :8087, Artifacts :8090, Postgres :5432, MinIO :9000/:9001, OpenObserve :5080, OTel Collector :4317 (gRPC) / :4318 (HTTP)
 
 ## Running tests
 
@@ -90,8 +90,11 @@ node tests/e2e/e2e-40-lineage-service.mjs --latest     # lineage API + graph (25
 node tests/e2e/artifact-lineage.mjs --latest           # ASCII lineage report
 node tests/e2e/artifact-lineage-html.mjs --latest      # HTML graph report
 bash tests/e2e/e2e-50-content-production-infra.sh      # shared skills, workspace, publisher, coder, routing (32 tests)
-bash tests/e2e/e2e-51-coder-rendering.sh               # coder toolchain, design system, live render, replication (13 tests)
+bash tests/e2e/e2e-51-coder-rendering.sh               # coder toolchain, design system, live render, replication (15 tests)
 bash tests/e2e/e2e-52-content-production-pipeline.sh   # full Writer → Coder → Publisher chain via planner (10 tests)
+bash tests/e2e/e2e-53-writer-style-tools.sh            # writer style extension permissions + config (23 tests, static)
+bun test tests/e2e/e2e-55-qa-agent-infra.sh            # QA agent config checks (17 tests, static)
+bun test tests/e2e/e2e-56-qa-agent-pipeline.test.ts    # QA agent pipeline integration (6 tests)
 ```
 
 ## Workproduct standard

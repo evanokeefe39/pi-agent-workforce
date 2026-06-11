@@ -45,6 +45,14 @@
     "duckdb_query": "allow",
     "duckdb_import": "allow",
 
+    // Writing Style tools — validate, fix, lint, profiles
+    "validate_style": "allow",
+    "fix_violations": "allow",
+    "vale_lint": "allow",
+    "load_style_profile": "allow",
+    "analyze_writing_samples": "allow",
+    "get_style_instructions": "allow",
+
     // Escalation
     "TaskCreate": "allow",
     "TaskList": "allow",

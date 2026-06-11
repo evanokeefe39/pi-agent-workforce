@@ -67,6 +67,18 @@ saves better for resource-dense formats.
 **Type A cross-account consistency:** Works across 6+ accounts at different
 follower tiers (eggintech 7.3%, learnwithseb 5.2%, sabrina_ramonov 4.5%).
 
+## Research Compression Workflow
+
+When ingesting long-form source material (transcripts, papers, documentation) for the content flywheel:
+
+1. Ingest source via `deep_research` or `web_fetch`
+2. Extract: key points, counterintuitive insights, builder-relevant findings, specific tools/numbers
+3. Grade each insight using ADMIRALTY system (typically B2 for primary source transcripts, A1 for verified metrics)
+4. Record each insight as a finding via `record_finding`
+5. Publish compiled findings as JSONL dataset artifact via `write_artifact` (type: `dataset`)
+
+Output contract: Writer expects `{"type": "finding", "finding": "...", "grade": "...", "source": "...", "context": "...", "tags": [...]}` per line.
+
 ## Anti-Patterns to Flag
 
 For detailed examples and evidence, read `{baseDir}/references/anti-patterns.md`.
@@ -102,6 +114,27 @@ For detailed Apify configuration, read `{baseDir}/references/apify-guide.md`.
 3. Rank by fans_per_day and fans_per_video
 4. Exclude known accounts
 5. Flag hearts/fans < 1x (AP1)
+
+### Small-account competitive intelligence
+
+Vendor config for scraping actors and parameters: see `config/vendors.yaml`.
+
+1. Scrape target hashtags via TikTok scraper (see vendors.yaml for actor/params, 50 posts/tag)
+2. Filter: followers < 50K, videos < 100 (growing accounts, not established)
+3. Compute: follower-to-view ratio (>10x = breakout), fans_per_video, share rate
+4. Flag anti-patterns: hearts/fans < 1x (ghost followers), high volume low fans/video (<30)
+5. Benchmarks: @buildwithfrancis 28x at 89 followers, @startscalr.com 10.7x at 1062, @shepherdttk 2.0% share rate
+
+### Dev-niche content format analysis
+
+Content formats ranked by engagement signal at <10K followers:
+
+- **Opportunity sharing**: 2.0% share rate — people redistribute resources to their network
+- **Complete reference guides**: 28x follower-to-view ratio — evergreen value drives algorithmic reach
+- **Counterintuitive safety/risk framing**: 1.4% share rate — challenges assumptions, triggers sharing
+- **Practitioner insider analysis**: high share rate among advanced practitioners — expertise signals attract high-value audience
+
+What doesn't work: generic AI lists, hookless demos, sub-15s with minimal caption, news without practitioner angle.
 
 ## Source Quality Grading
 

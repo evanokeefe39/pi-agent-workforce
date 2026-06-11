@@ -302,6 +302,28 @@ services:
       artifact-service:
         condition: service_healthy
 
+  qa:
+    <<: *agent
+    build:
+      <<: *agent-build
+      target: qa
+    ports:
+      - "8087:8080"
+    env_file:
+      - .env
+    environment:
+      AGENT_NAME: "qa"
+      WORKSPACE: "default"
+      ARTIFACT_SERVICE_URL: "http://artifact-service:8090"
+      BRIDGE_TIMEOUT_MS: "600000"
+      MAX_CONCURRENT_SESSIONS: "2"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+    volumes:
+      - qa-workspace:/workspace
+    depends_on:
+      artifact-service:
+        condition: service_healthy
+
 volumes:
   postgres-data:
     name: pi-agent-workforce-postgres-data
@@ -317,4 +339,6 @@ volumes:
     name: pi-agent-workforce-publisher-workspace
   coder-workspace:
     name: pi-agent-workforce-coder-workspace
+  qa-workspace:
+    name: pi-agent-workforce-qa-workspace
   openobserve-data:
