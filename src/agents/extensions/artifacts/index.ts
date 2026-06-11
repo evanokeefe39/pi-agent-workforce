@@ -6,20 +6,6 @@ import { createHash } from "node:crypto";
 import * as client from "./client.js";
 
 const TEMPLATES_ROOT = "/root/.pi/agent/extensions/workproduct-lib/templates";
-const AGENT_NAME = process.env.AGENT_NAME || "unknown";
-
-const MIME_MAP: Record<string, string> = {
-  md: "text/markdown",
-  json: "application/json",
-  jsonl: "application/x-ndjson",
-  csv: "text/csv",
-  txt: "text/plain",
-};
-
-function guessMime(filename: string): string {
-  const ext = path.extname(filename).replace(/^\./, "").toLowerCase();
-  return MIME_MAP[ext] || "application/octet-stream";
-}
 
 function parseId(input: string): string {
   if (input.startsWith("artifact://")) {
@@ -96,31 +82,6 @@ export default function (pi: ExtensionAPI) {
         }
 
         const hash = createHash("sha256").update(contentBuf).digest("hex");
-
-        // .meta.json sidecar — convention for replicator
-        const now = new Date().toISOString();
-        const sidecar = {
-          id,
-          filename: params.name,
-          artifact_type: params.type,
-          agent_name: AGENT_NAME,
-          session_id: params.run_id || sessionId,
-          created_at: now,
-          content_hash: `sha256:${hash}`,
-          size_bytes: contentBuf.length,
-          mime_type: guessMime(params.name),
-          lineage: { inputs: [], method: "output" },
-          tags: [],
-        };
-        fs.writeFileSync(filePath + ".meta.json.tmp", JSON.stringify(sidecar, null, 2));
-        fs.renameSync(filePath + ".meta.json.tmp", filePath + ".meta.json");
-
-        // Provenance manifest
-        fs.appendFileSync(path.join(cwd, "provenance.jsonl"), JSON.stringify({
-          ts: now, tool: "write_artifact", id,
-          path: `output/${fullFilename}`,
-          inputs: [], method: "output", artifact_type: params.type,
-        }) + "\n");
 
         const text = `Artifact written.\nID: ${id}\nSize: ${contentBuf.length} bytes\nHash: sha256:${hash}`;
         return { content: [{ type: "text" as const, text }] };
