@@ -1,16 +1,3 @@
-/**
- * Provenance extension for Pi SDK agents.
- *
- * Hooks tool_call and tool_result events to capture data lineage,
- * then emits OpenLineage RunEvents (START/RUNNING/COMPLETE) to Marquez.
- *
- * Graceful degradation:
- *   - No .provenance-context.json -> extension disabled
- *   - No marquezUrl in context    -> extension disabled
- *   - Emit failure                -> logged to stderr, never thrown
- *
- * Runs parallel to the existing artifact system with no breaking changes.
- */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { classify } from "./classifications.js";
 import { buildRunEvent, emitEvent } from "./openlineage.js";
@@ -23,72 +10,102 @@ interface ProvenanceContext {
   agentName: string;
   runId: string;
   marquezUrl: string | null;
+  toolPolicy?: Record<string, string>;
 }
 
-/** Emit a RUNNING event every N tool completions. */
 const RUNNING_INTERVAL = 30;
 
+const TOOL_ALTERNATIVES: Record<string, string> = {
+  write: "write_artifact or your workproduct tools (record_finding, record_query_result, etc.)",
+  edit: "write_artifact to create a new artifact instead of editing files directly",
+};
+
 export default function provenanceExtension(pi: ExtensionAPI) {
-  // Read context written by server.ts before extension init
   let ctx: ProvenanceContext;
   try {
     const raw = readFileSync(join(process.cwd(), ".provenance-context.json"), "utf-8");
     ctx = JSON.parse(raw);
   } catch {
-    // No context file — extension disabled (e.g., running outside server)
     return;
   }
 
-  if (!ctx.marquezUrl) return;
-
-  // Accumulated input URIs (deduplicated via Set)
+  const policy = ctx.toolPolicy;
   const inputs = new Set<string>();
-  // Accumulated output entries
   const outputs: Array<{ uri: string; facets?: Record<string, any> }> = [];
   let toolCallCount = 0;
 
-  // --- Emit START event ---
-  const startEvent = buildRunEvent({
-    eventType: "START",
-    runId: ctx.runId,
-    agentName: ctx.agentName,
-    correlationId: ctx.correlationId,
-    causationId: ctx.causationId,
-    inputs: [],
-    outputs: [],
-  });
-  emitEvent(ctx.marquezUrl, startEvent);
+  // Emit START event
+  if (ctx.marquezUrl) {
+    const startEvent = buildRunEvent({
+      eventType: "START",
+      runId: ctx.runId,
+      agentName: ctx.agentName,
+      correlationId: ctx.correlationId,
+      causationId: ctx.causationId,
+      inputs: [],
+      outputs: [],
+    });
+    emitEvent(ctx.marquezUrl, startEvent);
+  }
 
-  // --- Hook: tool_call — classify and track reads ---
+  // Hook: tool_call — policy enforcement + read tracking
   pi.on("tool_call", (event: any) => {
-    const classification = classify(event.toolName);
-    if (classification.type === "READ") {
-      try {
-        const uri = classification.uri(event.input);
-        inputs.add(uri);
-      } catch {
-        // URI builder failed on unexpected input shape — skip silently
+    // Tool policy enforcement
+    if (policy && Object.keys(policy).length > 0) {
+      const rule = policy[event.toolName] ?? policy["*"] ?? "allow";
+      if (rule === "block") {
+        const alt = TOOL_ALTERNATIVES[event.toolName] || "an allowed tool for this agent";
+        return {
+          block: true,
+          reason: `${event.toolName} is not available for ${ctx.agentName}. Use ${alt} instead.`,
+        };
+      }
+    }
+
+    // Provenance tracking
+    if (ctx.marquezUrl) {
+      const classification = classify(event.toolName);
+      if (classification.type === "READ") {
+        try {
+          const uri = classification.uri(event.input);
+          inputs.add(uri);
+        } catch {}
       }
     }
   });
 
-  // --- Hook: tool_result — track writes and emit periodic RUNNING ---
+  // Hook: tool_result — write tracking + periodic RUNNING
   pi.on("tool_result", (event: any) => {
-    const classification = classify(event.toolName);
-    if (classification.type === "WRITE") {
-      try {
-        const uri = classification.uri(event.input, event.result);
-        outputs.push({ uri });
-      } catch {
-        // URI builder failed on unexpected input/result shape — skip silently
+    if (ctx.marquezUrl) {
+      const classification = classify(event.toolName);
+      if (classification.type === "WRITE") {
+        try {
+          const uri = classification.uri(event.input, event.result);
+          outputs.push({ uri });
+        } catch {}
+      }
+
+      toolCallCount++;
+      if (toolCallCount % RUNNING_INTERVAL === 0) {
+        const runningEvent = buildRunEvent({
+          eventType: "RUNNING",
+          runId: ctx.runId,
+          agentName: ctx.agentName,
+          correlationId: ctx.correlationId,
+          causationId: ctx.causationId,
+          inputs: [...inputs],
+          outputs,
+        });
+        emitEvent(ctx.marquezUrl, runningEvent);
       }
     }
+  });
 
-    // Periodic RUNNING event for long-running agent sessions
-    toolCallCount++;
-    if (toolCallCount % RUNNING_INTERVAL === 0) {
-      const runningEvent = buildRunEvent({
-        eventType: "RUNNING",
+  // Hook: session end — emit COMPLETE
+  pi.on("session_shutdown", () => {
+    if (ctx.marquezUrl) {
+      const completeEvent = buildRunEvent({
+        eventType: "COMPLETE",
         runId: ctx.runId,
         agentName: ctx.agentName,
         correlationId: ctx.correlationId,
@@ -96,22 +113,7 @@ export default function provenanceExtension(pi: ExtensionAPI) {
         inputs: [...inputs],
         outputs,
       });
-      emitEvent(ctx.marquezUrl, runningEvent);
+      emitEvent(ctx.marquezUrl, completeEvent);
     }
-  });
-
-  // --- Hook: session end — emit COMPLETE ---
-  pi.on("session_shutdown", () => {
-    const completeEvent = buildRunEvent({
-      eventType: "COMPLETE",
-      runId: ctx.runId,
-      agentName: ctx.agentName,
-      correlationId: ctx.correlationId,
-      causationId: ctx.causationId,
-      inputs: [...inputs],
-      outputs,
-    });
-    // Fire-and-forget: emitEvent catches its own errors
-    emitEvent(ctx.marquezUrl, completeEvent);
   });
 }
