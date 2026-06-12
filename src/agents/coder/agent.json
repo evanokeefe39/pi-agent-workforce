@@ -16,7 +16,8 @@
       "write": "allow",
       "edit": "allow",
       "bash": "allow",
-      "read": "allow"
+      "read": "allow",
+      "publish_artifact": "allow"
     }
   }
 }

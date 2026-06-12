@@ -99,4 +99,4 @@ bun test tests/e2e/e2e-56-qa-agent-pipeline.test.ts    # QA agent pipeline integ
 
 ## Workproduct standard
 
-Researcher produces structured findings via `record_finding` with ADMIRALTY grades (A-F reliability, 1-6 credibility). Published as JSONL via `write_artifact` type `dataset`. Writer consumes findings, uses grades for hedging. Data agent uses DuckDB SQL for code-first analysis (`record_query_result`, `record_metric`, `record_chart`, `record_dataset_ref`). All workproduct tools write `.meta.json` sidecars for automatic replication.
+Researcher produces structured findings via `record_finding` with ADMIRALTY grades (A-F reliability, 1-6 credibility). Published as JSONL via `publish_artifact` type `dataset`. Writer consumes findings, uses grades for hedging. Data agent uses DuckDB SQL for code-first analysis (`record_query_result`, `record_metric`, `record_chart`, `record_dataset_ref`). Workproduct tools write validated local files; agents call `publish_artifact` to upload to artifact service.

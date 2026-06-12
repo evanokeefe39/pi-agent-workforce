@@ -45,7 +45,7 @@ pipeline instead of document generation:
 
 1. Call `analyze_writing_samples` with the samples directory path
 2. The tool extracts vocabulary fingerprint, sentence rhythm, structural patterns, tone markers
-3. Output the resulting profile to `style-profile.json`, publish via `write_artifact`
+3. Output the resulting profile to `style-profile.json`, publish via `publish_artifact`
 4. Include the profile path and a plain-language voice summary (3-5 sentences) in the response
 
 This action is mutually exclusive with document generation.

@@ -2,7 +2,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createHash } from "node:crypto";
 import { validateByStyle, type StyleProfiles } from "./workproduct-lib/validate.js";
 import { ArtifactRef, ISODate } from "./workproduct-lib/schemas.js";
 
@@ -42,8 +41,7 @@ function asError(msg: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Storage — plain fs, self-contained. Writes .meta.json sidecar as convention
-// for replicator to pick up. No shared module dependency.
+// Storage — plain fs, self-contained. Use publish_artifact to upload to storage.
 // ---------------------------------------------------------------------------
 
 const TYPE_DIRS: Record<string, string> = {
@@ -51,13 +49,6 @@ const TYPE_DIRS: Record<string, string> = {
   query_result: "queries",
   metric: "metrics",
   chart: "charts",
-};
-
-const METHOD_MAP: Record<string, string> = {
-  dataset_ref: "collection",
-  query_result: "transformation",
-  metric: "derivation",
-  chart: "visualization",
 };
 
 function getSessionCwd(ctx?: any): string {
@@ -71,19 +62,6 @@ function ulid(): string {
   } catch {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
-}
-
-function extractInputs(metadata: Record<string, unknown>): string[] {
-  const inputs: string[] = [];
-  for (const key of ["source_query_ref", "data_ref"]) {
-    const ref = metadata[key] as Record<string, unknown> | undefined;
-    if (ref?.id) inputs.push(ref.id as string);
-  }
-  for (const key of ["source_dataset_refs", "related_artifacts"]) {
-    const refs = metadata[key] as Array<Record<string, unknown>> | undefined;
-    if (refs) for (const ref of refs) { if (ref.id) inputs.push(ref.id as string); }
-  }
-  return inputs;
 }
 
 interface LocalRecord {
@@ -110,7 +88,6 @@ function writeLocal(
 
   const id = ulid();
   const timestamp = new Date().toISOString();
-  const sessionId = getSessionId(ctx);
 
   const record: LocalRecord = { id, agent: AGENT_NAME, type, filename, timestamp, content, metadata };
   const recordJson = JSON.stringify(record, null, 2);
@@ -120,32 +97,6 @@ function writeLocal(
   // Atomic write: tmp then rename
   fs.writeFileSync(filePath + ".tmp", recordJson);
   fs.renameSync(filePath + ".tmp", filePath);
-
-  // .meta.json sidecar — convention for replicator
-  const inputs = extractInputs(metadata);
-  const sidecar = {
-    id,
-    filename,
-    artifact_type: type === "query_result" || type === "dataset_ref" ? "dataset" : type,
-    agent_name: AGENT_NAME,
-    session_id: sessionId,
-    created_at: timestamp,
-    content_hash: "sha256:" + createHash("sha256").update(recordJson).digest("hex"),
-    size_bytes: Buffer.byteLength(recordJson, "utf-8"),
-    mime_type: "application/json",
-    lineage: { inputs, method: METHOD_MAP[type] || "unknown" },
-    tags: (metadata.topic_tags as string[]) || [],
-  };
-  fs.writeFileSync(filePath + ".meta.json.tmp", JSON.stringify(sidecar, null, 2));
-  fs.renameSync(filePath + ".meta.json.tmp", filePath + ".meta.json");
-
-  // Provenance manifest — append-only log
-  const provPath = path.join(cwd, "provenance.jsonl");
-  fs.appendFileSync(provPath, JSON.stringify({
-    ts: timestamp, tool: `record_${type}`, id,
-    path: `workproduct/${subdir}/${fullFilename}`,
-    inputs, method: METHOD_MAP[type] || "unknown",
-  }) + "\n");
 
   return { id };
 }
@@ -319,7 +270,7 @@ export default function (pi: ExtensionAPI) {
         const rows = params.rows_inline;
         if (Array.isArray(rows) && rows.length > 100) {
           return asError(
-            "rows_inline exceeds 100 rows. Write the full result to an artifact via write_artifact and pass result_artifact_ref instead.",
+            "rows_inline exceeds 100 rows. Write the full result to an artifact via publish_artifact and pass result_artifact_ref instead.",
           );
         }
 
@@ -342,7 +293,7 @@ export default function (pi: ExtensionAPI) {
 
         if (Buffer.byteLength(body, "utf8") > 1_000_000) {
           return asError(
-            "query_result content exceeds 1MB. Write the rows to an artifact via write_artifact and pass result_artifact_ref instead.",
+            "query_result content exceeds 1MB. Write the rows to an artifact via publish_artifact and pass result_artifact_ref instead.",
           );
         }
 

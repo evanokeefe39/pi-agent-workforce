@@ -203,6 +203,33 @@
 **How to apply:** Before using `import("some-package")` in server.ts, verify it's in `src/agents/package.json`. Run `bun install` to update the lockfile. Test with `docker exec <container> sh -c "bun -e \"require('some-package')\""` from /app/ context to verify resolution.
 **How to apply:** When adding new artifact types: add to Postgres CHECK constraint, add to artifact service VALID_ARTIFACT_TYPES set, add normalization to the producing agent's workproduct extension. Replicator stays unchanged.
 
+## Extensions must not couple to other extensions
+
+**Date:** 2026-06-12
+**Trigger:** Provenance spec v1 had provenance extension signal the replicator on write tool_result to trigger artifact upload. Implementation went through multiple sessions trying to wire hook → signal → upload. When provenance was misconfigured, artifact uploads silently broke. The coupling was the root cause — lineage tracking (observability) should never be a dependency of data storage (infrastructure).
+**Rule:** No extension should depend on, trigger, or signal another extension. Each extension does one thing. If two actions need to happen in sequence (write a file, then publish it), the AGENT handles that sequencing via explicit tool calls, not hidden extension wiring. Extensions are leaves, not links in a chain.
+**How to apply:** When designing a new extension, check: does this extension need another extension to be loaded for its core function to work? If yes, the design is wrong — split the shared concern into something the agent or server owns. When reviewing extension code, grep for imports from other extension directories — those are coupling violations.
+
+---
+
+## publish_artifact replaces write_artifact + replicator + sidecars
+
+**Date:** 2026-06-12
+**Trigger:** write_artifact combined three concerns: file creation, metadata sidecar creation, and artifact upload triggering (via sidecar → replicator → artifact service). Removing any part broke the chain. The replicator was a filesystem watcher that parsed .meta.json sidecars — fragile on timing, races, and missed events. The entire chain existed because v1 tried to make artifact publishing automatic and invisible.
+**Rule:** Explicit is better than automatic for agent actions. `publish_artifact` is a single tool that reads a local file and uploads via HTTP. The agent decides what to publish and when. No sidecars, no filesystem watching, no replicator module. Workproduct tools write validated local files. `publish_artifact` uploads them. Two steps, zero coupling.
+**How to apply:** Any "automatic" behavior that chains extensions together should be replaced with an explicit agent tool call. If the agent needs to do X then Y, give it tools for X and Y and let the prompt teach the sequence. Don't wire X's extension to trigger Y's extension internally.
+
+---
+
+## Tool policy enforcement must be independent of provenance tracking
+
+**Date:** 2026-06-12
+**Trigger:** v1 spec put tool policy enforcement (blocking write/edit for non-coder agents) inside the provenance extension. This meant an agent couldn't have tool access controls without also having lineage tracking enabled. These are orthogonal concerns — access control is a security/quality decision, lineage is an observability decision.
+**Rule:** Tool policy is its own extension (or server-level hook). It reads `runtimeConfig.toolPolicy` from agent.json and blocks disallowed tools. It doesn't import, reference, or depend on the provenance extension. An agent can have tool policy without provenance, provenance without tool policy, both, or neither.
+**How to apply:** When adding enforcement logic, check: is this enforcement orthogonal to the extension's primary purpose? If a provenance extension is enforcing access control, or a workproduct extension is triggering uploads, the concern is in the wrong place.
+
+---
+
 ## Subagent artifacts have their own run_id — use `since` for pipeline-scoped queries
 
 **Date:** 2026-06-10

@@ -7,8 +7,6 @@ import {
   createAgentSession,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { init as initReplicator, startWatcher, waitForSession, getStatus as getReplicatorStatus } from "./replicator.js";
-import { createArtifactStore } from "./artifact-store.js";
 import {
   type ValidationConfig,
   type UsageRecord,
@@ -33,7 +31,6 @@ const MAX_BODY_BYTES = parseInt(process.env.MAX_BODY_BYTES || "1048576", 10);
 const VERSION = "5.2.0";
 const SESSIONS_ROOT = "/workspace/sessions";
 const CWD = "/workspace/scratch";
-const REPLICATION_TIMEOUT_MS = parseInt(process.env.REPLICATION_TIMEOUT_MS || "10000", 10);
 const MAX_PROMPT_RETRIES = parseInt(process.env.MAX_PROMPT_RETRIES || "2", 10);
 const SDK_MESSAGE_ROLE_ERROR = /Cannot continue from message role/;
 
@@ -62,7 +59,6 @@ const logger = createLogger({ service: SERVICE_NAME });
 
 let agentMeta = { name: AGENT_NAME, description: "", role: "", capabilities: "" };
 let validationConfig: ValidationConfig = { maxTurns: 0, requiredTools: [], requiredArtifactType: "" };
-let toolPolicy: Record<string, string> = {};
 try {
   const raw = readFileSync(`/app/${AGENT_NAME}/agent.json`, "utf-8");
   const parsed = JSON.parse(raw);
@@ -78,7 +74,6 @@ try {
     requiredTools: v.requiredTools || [],
     requiredArtifactType: v.requiredArtifactType || "",
   };
-  toolPolicy = parsed.runtimeConfig?.toolPolicy || {};
 } catch { /* agent.json not found */ }
 
 function log(level: string, event: string, data: Record<string, unknown> = {}) {
@@ -230,7 +225,6 @@ async function processInvocation(body: any, requestId: string, requestStart: num
       agentName: AGENT_NAME,
       runId: requestId,
       marquezUrl: process.env.MARQUEZ_URL || null,
-      toolPolicy,
     };
     writeFileSync(
       `${sessionDir}/.provenance-context.json`,
@@ -439,21 +433,6 @@ async function processInvocation(body: any, requestId: string, requestStart: num
     trackRun(requestId, {
       status: "failed", completedAt: new Date().toISOString(), output,
       usage, sessionId, error: validation.errors.join("; "),
-    });
-    releaseSlot();
-    return;
-  }
-
-  // Agent-complete gate: wait for file replication before marking done
-  const repl = await waitForSession(sessionDir, REPLICATION_TIMEOUT_MS);
-  if (!repl.ok) {
-    log("error", "andon_replication_incomplete", {
-      request_id: requestId, outstanding: repl.outstanding, session_dir: sessionDir,
-    });
-    trackRun(requestId, {
-      status: "failed", completedAt: new Date().toISOString(), output,
-      usage, sessionId,
-      error: `replication incomplete: ${repl.outstanding} files not synced to storage`,
     });
     releaseSlot();
     return;
@@ -700,9 +679,6 @@ const start = async () => {
   }
 
   const extCount = services.resourceLoader.getExtensions().extensions.length;
-
-  initReplicator(createArtifactStore(), log);
-  startWatcher();
 
   log("info", "ready", { startup_ms: Date.now() - bootTime, agent_name: AGENT_NAME, extensions: extCount });
 

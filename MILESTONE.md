@@ -216,21 +216,40 @@ Not started.
 
 ---
 
-## R1: Provenance and Artifact Architecture Refactor
+## R1: Provenance and Artifact Architecture Refactor — PHASES 1-3 COMPLETE
 
 Replace tangled artifact/provenance system with industry-standard OpenLineage + Marquez.
 Separates event capture, blob storage, metadata, lineage, and discovery into independent
 layers. Introduces per-agent tool policies for workproduct enforcement.
 
-Spec: `tasks/specs/provenance-and-artifact-architecture.md`
+Spec: `tasks/specs/provenance-and-artifact-architecture.md` | Plan: `tasks/plans/provenance-openlineage.md`
+Branch: `refactor/provenance-openlineage`
+
+### What shipped (Phases 1-3)
+
+- Marquez API (:5000) + Web UI (:3001) in docker-compose
+- Provenance extension (`extensions/provenance/`) — tool_call/tool_result hooks, OpenLineage START/RUNNING/COMPLETE event emission to Marquez
+- Per-agent tool policies in all 7 agent.json configs (researcher/writer/data/qa/publisher block native write+edit, coder full access, planner delegates only)
+- Removed old lineage system: graph.ts, lineage-ui/, artifact_edges table, lineage endpoints, graphology deps, readLog tracking, provenance.jsonl (net -2533 lines)
+- Restored .meta.json sidecar creation in write_artifact (replicator trigger mechanism)
 
 ### Phases
 
-1. Marquez + provenance extension (parallel with existing system, no breaking changes)
-2. Per-agent tool policy enforcement (block native write on researcher/writer/data/QA)
-3. Remove old system (write_artifact, .meta.json sidecars, graph.ts, lineage-ui, readLog)
-4. Extend (more tool classifications, column-level lineage, temporal queries)
+1. ~~Marquez + provenance extension~~ — COMPLETE
+2. ~~Per-agent tool policy enforcement~~ — COMPLETE
+3. ~~Remove old system (graph.ts, lineage-ui, artifact_edges, readLog)~~ — COMPLETE
+4. Extend (more tool classifications, column-level lineage, temporal queries) — NOT STARTED
 
-### Status
+### Success criteria
 
-Spec complete. Roadmapped for next feature cycle after content flywheel branch lands.
+- [x] Provenance extension emits OpenLineage events on tool_call and tool_result hooks
+- [x] Tool policy enforcement blocks disallowed tools per agent config
+- [x] Policy enforcement works independently of Marquez availability
+- [x] Old lineage system fully removed (graph.ts, lineage-ui, artifact_edges, readLog)
+- [x] Artifact replication preserved (write_artifact creates .meta.json sidecars for replicator)
+- [x] All agent.json configs have toolPolicy defined
+- [ ] Phase 4: Extended tool classifications beyond READ/WRITE
+- [ ] Phase 4: Column-level lineage tracking
+- [ ] Phase 4: Temporal lineage queries via Marquez API
+
+Phases 1-3 completed 2026-06-11.

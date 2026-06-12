@@ -10,15 +10,9 @@ interface ProvenanceContext {
   agentName: string;
   runId: string;
   marquezUrl: string | null;
-  toolPolicy?: Record<string, string>;
 }
 
-const RUNNING_INTERVAL = 30;
-
-const TOOL_ALTERNATIVES: Record<string, string> = {
-  write: "write_artifact or your workproduct tools (record_finding, record_query_result, etc.)",
-  edit: "write_artifact to create a new artifact instead of editing files directly",
-};
+const RUNNING_INTERVAL = 10;
 
 export default function provenanceExtension(pi: ExtensionAPI) {
   let ctx: ProvenanceContext;
@@ -29,7 +23,6 @@ export default function provenanceExtension(pi: ExtensionAPI) {
     return;
   }
 
-  const policy = ctx.toolPolicy;
   const inputs = new Set<string>();
   const outputs: Array<{ uri: string; facets?: Record<string, any> }> = [];
   let toolCallCount = 0;
@@ -48,21 +41,8 @@ export default function provenanceExtension(pi: ExtensionAPI) {
     emitEvent(ctx.marquezUrl, startEvent);
   }
 
-  // Hook: tool_call — policy enforcement + read tracking
+  // Hook: tool_call — read tracking for provenance
   pi.on("tool_call", (event: any) => {
-    // Tool policy enforcement
-    if (policy && Object.keys(policy).length > 0) {
-      const rule = policy[event.toolName] ?? policy["*"] ?? "allow";
-      if (rule === "block") {
-        const alt = TOOL_ALTERNATIVES[event.toolName] || "an allowed tool for this agent";
-        return {
-          block: true,
-          reason: `${event.toolName} is not available for ${ctx.agentName}. Use ${alt} instead.`,
-        };
-      }
-    }
-
-    // Provenance tracking
     if (ctx.marquezUrl) {
       const classification = classify(event.toolName);
       if (classification.type === "READ") {

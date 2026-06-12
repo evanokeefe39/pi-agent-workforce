@@ -70,7 +70,7 @@ RESEARCHER_LOGS=$(docker logs pi-agent-workforce-researcher-1 2>&1 || true)
 R_WEB_SEARCHES=$(echo "$RESEARCHER_LOGS" | grep -c 'web_search' || true)
 R_SCRAPES=$(echo "$RESEARCHER_LOGS" | grep -c 'scrape_apify' || true)
 R_FINDINGS_RECORDED=$(echo "$RESEARCHER_LOGS" | grep -c 'record_finding' || true)
-R_ARTIFACTS_WRITTEN=$(echo "$RESEARCHER_LOGS" | grep -c 'write_artifact' || true)
+R_ARTIFACTS_WRITTEN=$(echo "$RESEARCHER_LOGS" | grep -c 'publish_artifact' || true)
 R_DEEP_RESEARCH=$(echo "$RESEARCHER_LOGS" | grep -c 'deep_research' || true)
 
 # --- Planner container logs (delegation decisions) ---
@@ -87,7 +87,7 @@ echo "    web_search: $R_WEB_SEARCHES"
 echo "    scrape_apify: $R_SCRAPES"
 echo "    deep_research: $R_DEEP_RESEARCH"
 echo "    record_finding: $R_FINDINGS_RECORDED"
-echo "    write_artifact: $R_ARTIFACTS_WRITTEN"
+echo "    publish_artifact: $R_ARTIFACTS_WRITTEN"
 echo ""
 echo "  Agent completions: researcher=$R_COMPLETED, writer=$W_COMPLETED"
 echo ""
@@ -187,7 +187,7 @@ write_report "$REPORT" "# E2E-30: Instagram Growth Strategy Research (Planner)
 | scrape_apify | $R_SCRAPES |
 | deep_research | $R_DEEP_RESEARCH |
 | record_finding | $R_FINDINGS_RECORDED |
-| write_artifact | $R_ARTIFACTS_WRITTEN |
+| publish_artifact | $R_ARTIFACTS_WRITTEN |
 
 ### Agent Completions
 | Agent | Runs Completed |

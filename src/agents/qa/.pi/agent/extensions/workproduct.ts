@@ -804,7 +804,7 @@ export default function (pi: ExtensionAPI) {
       "Export all recorded violations and commendations as a JSONL string. " +
       "Each line is a JSON object with type, rule_id, severity/impact, domain, " +
       "evidence, recommendation/standard_ref, and source_artifact. " +
-      "Use the output with write_artifact to publish the evaluation dataset.",
+      "Use the output with publish_artifact to publish the evaluation dataset.",
     parameters: Type.Object({
       source_artifact: Type.Optional(Type.String({
         description: "Filter to evaluations for a specific source artifact",

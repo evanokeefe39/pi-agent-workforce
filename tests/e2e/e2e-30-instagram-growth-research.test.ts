@@ -104,7 +104,7 @@ describe("E2E-30: Instagram Growth Strategy Research (Planner)", () => {
     rWebSearches = countInLogs(researcherLogs, /web_search/g);
     rScrapes = countInLogs(researcherLogs, /scrape_apify/g);
     rFindingsRecorded = countInLogs(researcherLogs, /record_finding/g);
-    rArtifactsWritten = countInLogs(researcherLogs, /write_artifact/g);
+    rArtifactsWritten = countInLogs(researcherLogs, /publish_artifact/g);
     rDeepResearch = countInLogs(researcherLogs, /deep_research/g);
 
     // --- Agent metrics ---
@@ -133,7 +133,7 @@ describe("E2E-30: Instagram Growth Strategy Research (Planner)", () => {
     console.log(`    scrape_apify: ${rScrapes}`);
     console.log(`    deep_research: ${rDeepResearch}`);
     console.log(`    record_finding: ${rFindingsRecorded}`);
-    console.log(`    write_artifact: ${rArtifactsWritten}`);
+    console.log(`    publish_artifact: ${rArtifactsWritten}`);
     console.log(`\n  Agent completions: researcher=${rCompleted}, writer=${wCompleted}`);
     console.log(`\n  Artifacts: ${runArtifacts.length} total (run-scoped)`);
     console.log(`    Research: ${byType("research")} | Dataset: ${byType("dataset")} | Report: ${byType("report")} | Brief: ${byType("brief")}`);
@@ -248,7 +248,7 @@ describe("E2E-30: Instagram Growth Strategy Research (Planner)", () => {
 | scrape_apify | ${rScrapes} |
 | deep_research | ${rDeepResearch} |
 | record_finding | ${rFindingsRecorded} |
-| write_artifact | ${rArtifactsWritten} |
+| publish_artifact | ${rArtifactsWritten} |
 
 ### Agent Completions
 | Agent | Runs Completed |

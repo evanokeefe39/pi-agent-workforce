@@ -15,7 +15,7 @@
     "toolPolicy": {
       "write": "block",
       "edit": "block",
-      "write_artifact": "allow",
+      "publish_artifact": "allow",
       "read": "allow",
       "bash": "allow"
     }

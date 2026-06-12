@@ -12,12 +12,17 @@
   },
   "runtimeConfig": {
     "heartbeat": { "enabled": true, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 },
+    "validation": {
+      "maxTurns": 40,
+      "requiredTools": ["record_violation", "publish_artifact"],
+      "requiredArtifactType": "report"
+    },
     "toolPolicy": {
       "write": "block",
       "edit": "block",
       "record_violation": "allow",
       "record_commendation": "allow",
-      "write_artifact": "allow",
+      "publish_artifact": "allow",
       "read": "allow",
       "bash": "allow"
     }

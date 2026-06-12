@@ -75,7 +75,7 @@ When ingesting long-form source material (transcripts, papers, documentation) fo
 2. Extract: key points, counterintuitive insights, builder-relevant findings, specific tools/numbers
 3. Grade each insight using ADMIRALTY system (typically B2 for primary source transcripts, A1 for verified metrics)
 4. Record each insight as a finding via `record_finding`
-5. Publish compiled findings as JSONL dataset artifact via `write_artifact` (type: `dataset`)
+5. Publish compiled findings as JSONL dataset artifact via `publish_artifact` (type: `dataset`)
 
 Output contract: Writer expects `{"type": "finding", "finding": "...", "grade": "...", "source": "...", "context": "...", "tags": [...]}` per line.
 

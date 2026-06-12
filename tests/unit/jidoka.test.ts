@@ -20,7 +20,7 @@ const baseUsage: UsageRecord = {
 
 const baseConfig: ValidationConfig = {
   maxTurns: 60,
-  requiredTools: ["record_finding", "write_artifact"],
+  requiredTools: ["record_finding", "publish_artifact"],
   requiredArtifactType: "dataset",
 };
 
@@ -62,7 +62,7 @@ describe("validateRequiredTools", () => {
   it("passes when all required tools were called", () => {
     const result = validateRequiredTools(baseConfig, {
       record_finding: 5,
-      write_artifact: 1,
+      publish_artifact: 1,
       web_search: 3,
     });
     expect(result.pass).toBe(true);
@@ -73,14 +73,14 @@ describe("validateRequiredTools", () => {
       record_finding: 5,
     });
     expect(result.pass).toBe(false);
-    expect(result.errors[0]).toContain("write_artifact");
+    expect(result.errors[0]).toContain("publish_artifact");
   });
 
   it("fails when no tools were called at all", () => {
     const result = validateRequiredTools(baseConfig, {});
     expect(result.pass).toBe(false);
     expect(result.errors[0]).toContain("record_finding");
-    expect(result.errors[0]).toContain("write_artifact");
+    expect(result.errors[0]).toContain("publish_artifact");
   });
 
   it("passes when requiredTools is empty", () => {
@@ -94,7 +94,7 @@ describe("validateRequiredTools", () => {
   it("treats zero call count as missing", () => {
     const result = validateRequiredTools(baseConfig, {
       record_finding: 0,
-      write_artifact: 1,
+      publish_artifact: 1,
     });
     expect(result.pass).toBe(false);
     expect(result.errors[0]).toContain("record_finding");
@@ -132,7 +132,7 @@ describe("checkMidRunTools", () => {
   it("no warning when tools have been called", () => {
     const result = checkMidRunTools(baseConfig, {
       record_finding: 1,
-      write_artifact: 1,
+      publish_artifact: 1,
     }, 10);
     expect(result.warnings.length).toBe(0);
   });
@@ -142,7 +142,7 @@ describe("checkMidRunTools", () => {
       record_finding: 3,
     }, 10);
     expect(result.warnings.length).toBe(1);
-    expect(result.warnings[0]).toContain("write_artifact");
+    expect(result.warnings[0]).toContain("publish_artifact");
     expect(result.warnings[0]).not.toContain("record_finding");
   });
 
@@ -196,7 +196,7 @@ describe("validateRun", () => {
   it("passes when everything is valid", () => {
     const result = validateRun(baseConfig, {
       record_finding: 5,
-      write_artifact: 1,
+      publish_artifact: 1,
     }, baseUsage);
     expect(result.pass).toBe(true);
     expect(result.errors.length).toBe(0);
@@ -214,7 +214,7 @@ describe("validateRun", () => {
   it("fails with zero output even when tools are present", () => {
     const result = validateRun(baseConfig, {
       record_finding: 5,
-      write_artifact: 1,
+      publish_artifact: 1,
     }, { ...baseUsage, outputTokens: 0 });
     expect(result.pass).toBe(false);
     expect(result.errors.length).toBe(1);

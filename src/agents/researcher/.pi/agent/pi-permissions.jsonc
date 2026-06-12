@@ -37,7 +37,7 @@
     "scrape_status": "allow",
 
     // Artifacts — full access
-    "write_artifact": "allow",
+    "publish_artifact": "allow",
     "read_artifact": "allow",
     "list_artifacts": "allow",
     "get_template": "allow",

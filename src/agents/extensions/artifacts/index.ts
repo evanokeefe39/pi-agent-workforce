@@ -2,7 +2,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { createHash } from "node:crypto";
 import * as client from "./client.js";
 
 const TEMPLATES_ROOT = "/root/.pi/agent/extensions/workproduct-lib/templates";
@@ -16,74 +15,67 @@ function parseId(input: string): string {
   return input;
 }
 
-function generateId(): string {
-  try {
-    const mod = require("./workproduct-lib/ulid.js");
-    return mod.ulid();
-  } catch {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  }
+function guessMime(filename: string): string {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    json: "application/json", jsonl: "application/x-ndjson",
+    md: "text/markdown", txt: "text/plain", csv: "text/csv",
+    html: "text/html", png: "image/png", jpg: "image/jpeg",
+    jpeg: "image/jpeg", svg: "image/svg+xml", pdf: "application/pdf",
+  };
+  return map[ext || ""] || "application/octet-stream";
 }
 
 export default function (pi: ExtensionAPI) {
   if (!client.getAgentName()) return;
 
-  // ---- write_artifact ----
+  // ---- publish_artifact ----
   pi.registerTool({
-    name: "write_artifact",
-    label: "Write Artifact",
+    name: "publish_artifact",
+    label: "Publish Artifact",
     description:
-      "Write a file to the session output directory. The file is automatically replicated to object storage for other agents to read. Returns an artifact ID, size, and hash.",
+      "Upload a local file to the artifact service (MinIO/S3). Reads the file from disk and uploads via HTTP. " +
+      "Use this after writing files with workproduct tools. Returns the artifact URI for cross-agent references.",
     promptSnippet:
-      "When sharing work with other agents or referencing artifacts:\n" +
-      "- Write output using write_artifact. It returns an artifact ID.\n" +
-      "- For text files, pass content directly. For binary files (images, PDFs), save the file first then pass file_path.\n" +
-      "- Pass that ID in task responses or handoff messages. Never paste artifact content inline.\n" +
-      "- To read another agent's work, call read_artifact with the ID you received.\n" +
-      "- To discover available artifacts, call list_artifacts with filters.",
+      "After producing output files, ALWAYS publish them:\n" +
+      "1. Write files using workproduct tools (record_finding, record_report, etc.)\n" +
+      "2. Call publish_artifact with the file_path to upload to storage\n" +
+      "Without publish_artifact, files stay local and other agents cannot access them.",
     parameters: Type.Object({
-      name: Type.String({ description: "Filename including extension, e.g. findings.jsonl" }),
-      content: Type.Optional(Type.String({ description: "File content to write (text). Omit if using file_path for binary files." })),
-      file_path: Type.Optional(Type.String({ description: "Path to an existing file to publish as artifact (use for binary files like images, PDFs). Relative to session dir or absolute." })),
-      type: Type.String({ description: "Artifact type, e.g. report, dataset, code, brief, image, render" }),
-      template: Type.Optional(Type.String({ description: "Template name used to produce this artifact" })),
+      file_path: Type.String({ description: "Path to the local file to publish. Absolute or relative to session dir." }),
+      type: Type.String({ description: "Artifact type: report, dataset, code, brief, image, render, finding, metric, chart" }),
+      filename: Type.Optional(Type.String({ description: "Override filename in storage (defaults to basename of file_path)" })),
+      tags: Type.Optional(Type.Record(Type.String(), Type.Unknown(), { description: "Optional metadata tags" })),
       run_id: Type.Optional(Type.String({ description: "Run ID (auto-set from session if omitted)" })),
       workspace: Type.Optional(Type.String({ description: "Workspace name (auto-set from env if omitted)" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
-        if (!params.content && !params.file_path) {
-          return { content: [{ type: "text" as const, text: "Error: provide either content or file_path" }] };
-        }
-
-        const sessionId = ctx?.sessionManager?.getSessionId?.() || "unknown";
         const cwd = ctx?.sessionManager?.getCwd?.() || process.cwd();
-        const outputDir = path.join(cwd, "output");
-        fs.mkdirSync(outputDir, { recursive: true });
+        const srcPath = path.isAbsolute(params.file_path)
+          ? params.file_path
+          : path.join(cwd, params.file_path);
 
-        const id = generateId();
-        const fullFilename = `${id}_${params.name}`;
-        const filePath = path.join(outputDir, fullFilename);
-
-        let contentBuf: Buffer;
-        if (params.file_path) {
-          const srcPath = path.isAbsolute(params.file_path)
-            ? params.file_path
-            : path.join(cwd, params.file_path);
-          if (!fs.existsSync(srcPath)) {
-            return { content: [{ type: "text" as const, text: `Error: file not found: ${srcPath}` }] };
-          }
-          contentBuf = fs.readFileSync(srcPath);
-          fs.copyFileSync(srcPath, filePath);
-        } else {
-          contentBuf = Buffer.from(params.content!, "utf-8");
-          fs.writeFileSync(filePath + ".tmp", params.content!);
-          fs.renameSync(filePath + ".tmp", filePath);
+        if (!fs.existsSync(srcPath)) {
+          return { content: [{ type: "text" as const, text: `Error: file not found: ${srcPath}` }] };
         }
 
-        const hash = createHash("sha256").update(contentBuf).digest("hex");
+        const contentBuf = fs.readFileSync(srcPath);
+        const contentBase64 = contentBuf.toString("base64");
+        const storageName = params.filename || path.basename(srcPath);
 
-        const text = `Artifact written.\nID: ${id}\nSize: ${contentBuf.length} bytes\nHash: sha256:${hash}`;
+        const result = await client.writeRaw({
+          filename: storageName,
+          content: "",
+          contentBase64,
+          type: params.type,
+          mime: guessMime(storageName),
+          metadata: params.tags || {},
+          run_id: params.run_id || ctx?.sessionManager?.getSessionId?.() || undefined,
+          workspace: params.workspace || process.env.WORKSPACE || undefined,
+        });
+
+        const text = `Published to artifact service.\nRef: ${result.ref}\nID: ${result.id}\nSize: ${result.size} bytes\nHash: ${result.hash}`;
         return { content: [{ type: "text" as const, text }] };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

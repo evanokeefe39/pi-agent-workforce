@@ -14,13 +14,13 @@
     "heartbeat": { "enabled": false, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 },
     "validation": {
       "maxTurns": 50,
-      "requiredTools": ["write_artifact"],
+      "requiredTools": ["publish_artifact"],
       "requiredArtifactType": "report"
     },
     "toolPolicy": {
       "write": "block",
       "edit": "block",
-      "write_artifact": "allow",
+      "publish_artifact": "allow",
       "read": "allow",
       "bash": "allow",
       "web_search": "allow"

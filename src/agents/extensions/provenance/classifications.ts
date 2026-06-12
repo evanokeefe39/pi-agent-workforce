@@ -27,6 +27,7 @@ const CLASSIFICATIONS: Record<string, ToolClassification> = {
   record_chart:      { type: "WRITE", uri: (i) => `workproduct://charts/${i.name || "unknown"}` },
   record_dataset_ref: { type: "WRITE", uri: (i) => `workproduct://datasets/${i.name || "unknown"}` },
   write_artifact:    { type: "WRITE", uri: (i) => `artifact://${i.name || "unknown"}` },
+  publish_artifact:  { type: "WRITE", uri: (i) => `artifact://${i.file_path || "unknown"}` },
   read_artifact:     { type: "READ",  uri: (i) => `artifact://${i.id || "unknown"}` },
   list_artifacts:    { type: "READ",  uri: () => `artifact://list` },
 

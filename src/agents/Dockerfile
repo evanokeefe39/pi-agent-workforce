@@ -9,7 +9,7 @@ RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/lo
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --production
-COPY server.ts logger.mjs jidoka.ts replicator.ts artifact-store.ts ./
+COPY server.ts logger.mjs jidoka.ts artifact-store.ts ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/deep-research/ /root/.pi/agent/extensions/deep-research/
 COPY extensions/duckdb/ /root/.pi/agent/extensions/duckdb/
@@ -17,6 +17,7 @@ COPY extensions/web-fetch.ts /root/.pi/agent/extensions/web-fetch.ts
 COPY extensions/web-scrape/ /root/.pi/agent/extensions/web-scrape/
 COPY extensions/web-search.ts /root/.pi/agent/extensions/web-search.ts
 COPY extensions/provenance/ /root/.pi/agent/extensions/provenance/
+COPY extensions/tool-policy/ /root/.pi/agent/extensions/tool-policy/
 COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
 RUN pi extensions install || true
@@ -43,10 +44,11 @@ RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/lo
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --production
-COPY server.ts logger.mjs jidoka.ts replicator.ts artifact-store.ts ./
+COPY server.ts logger.mjs jidoka.ts artifact-store.ts ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/subagent-http/ /root/.pi/agent/extensions/subagent-http/
 COPY extensions/provenance/ /root/.pi/agent/extensions/provenance/
+COPY extensions/tool-policy/ /root/.pi/agent/extensions/tool-policy/
 RUN cd /root/.pi/agent/extensions/subagent-http && npm install --omit=dev 2>/dev/null || true
 COPY planner/.pi/agent/ /root/.pi/agent/
 COPY planner/agent.json /app/planner/agent.json
