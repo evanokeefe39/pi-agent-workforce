@@ -230,6 +230,31 @@
 
 ---
 
+## Cross-agent OTel trace propagation — bypass AsyncLocalStorage, use pi-otel events
+
+**Date:** 2026-06-13
+**Trigger:** Each agent created independent traces in OpenObserve — no unified view of planner → researcher → writer → QA orchestration. Attempted 4 approaches before finding the working solution.
+**Root cause chain:**
+1. Pi SDK tool dispatch breaks AsyncLocalStorage — context.active() returns ROOT_CONTEXT inside tool execute(), even when context.with() wraps the session. This is by design (extension isolation).
+2. @opentelemetry/api installed in two locations (/app/node_modules and /root/.pi/agent/npm/node_modules) initially appeared to create separate global states, but `Symbol.for('opentelemetry.js.api.1')` shares state across copies. The duplicate wasn't the real problem.
+3. Pi SDK has no metadata/context passthrough — createAgentSession, sessionStartEvent, bindExtensions, ExtensionContext are all closed interfaces with no room for custom data like traceparent.
+4. pi-otel always parents pi.interaction off otelContext.active() — no TRACEPARENT env var, no header extraction.
+
+**Working solution:**
+- Sending side: subagent-http listens for `pi-otel:trace-active` event (inter-extension channel), stores traceId, constructs traceparent header manually with `randomBytes(8)` for spanId. No @opentelemetry/api import needed.
+- Receiving side: server.ts extracts parent context from traceparent header via `propagation.extract()` after `bindExtensions()`. Wraps `session.prompt()` in `context.with(parentCtx)`. Works because `before_agent_start` fires synchronously during prompt() — pi-otel picks up the parent. Symbol.for() ensures server.ts's @opentelemetry/api copy sees the propagator pi-otel registered.
+- Result: 365 spans across 4 agents in one trace.
+
+**Failed approaches (don't repeat):**
+1. Symlinks in Dockerfile to unify @opentelemetry/api copies — unnecessary (Symbol.for handles it)
+2. NODE_PATH to share node_modules — unnecessary (Symbol.for handles it)
+3. AsyncHooksContextManager registration at startup — doesn't help because Pi SDK tool dispatch still breaks the async chain
+4. context.with() wrapping the entire session — works for synchronous events but NOT for tool execution
+
+**How to apply:** When integrating OTel across Pi SDK extensions, never rely on context.active() during tool execution. Use pi-otel's event channels (pi-otel:trace-active, pi-otel:status) for inter-extension data sharing. Multiple copies of @opentelemetry/api are safe at the same major version thanks to Symbol.for().
+
+---
+
 ## Subagent artifacts have their own run_id — use `since` for pipeline-scoped queries
 
 **Date:** 2026-06-10

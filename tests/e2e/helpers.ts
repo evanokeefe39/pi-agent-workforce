@@ -248,7 +248,7 @@ export async function artifactFindingsCount(
       if (!line.trim()) continue;
       try {
         const obj = JSON.parse(line);
-        if ("claim" in obj) total++;
+        if ("claim" in obj || "fact" in obj || "finding" in obj || "dimension" in obj || "rule_id" in obj || "evidence" in obj) total++;
       } catch {
         // not valid JSON line
       }

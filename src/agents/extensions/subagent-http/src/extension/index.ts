@@ -19,7 +19,7 @@ import { SubagentHttpParams } from "./schemas.ts";
 import { loadConfig } from "./config.ts";
 import type { AgentEndpoint, RemoteRun, RemoteRunState, ResultResponse } from "../transport/types.ts";
 import { listAgents } from "../transport/config.ts";
-import { invoke, getStatus, getResult, cancelRun } from "../transport/http-client.ts";
+import { invoke, getStatus, getResult, cancelRun, setActiveTraceId } from "../transport/http-client.ts";
 import { AgentMonitor } from "../transport/agent-monitor.ts";
 import { pollUntilDone, type PollResult } from "../transport/poll.ts";
 import { randomUUID } from "node:crypto";
@@ -55,6 +55,10 @@ export default function registerSubagentHttpExtension(pi: ExtensionAPI): void {
   const pollIntervalMs = config.defaults?.pollIntervalMs ?? 3000;
   const tracker = new JobTracker(pollIntervalMs);
   const monitor = new AgentMonitor(config);
+
+  pi.events.on("pi-otel:trace-active", (data: any) => {
+    if (data?.traceId) setActiveTraceId(data.traceId);
+  });
 
   function resolveAgent(name: string): AgentEndpoint | undefined {
     const lower = name.toLowerCase();

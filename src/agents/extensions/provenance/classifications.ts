@@ -9,11 +9,24 @@ export interface ToolClassification {
   uri: (input: any, result?: any) => string;
 }
 
+function basename(p: string): string {
+  const last = p.replace(/\\/g, "/").split("/").pop();
+  return last || p;
+}
+
+function extractArtifactRef(_i: any, r: any): string {
+  // tool_result event may pass result as string, { text }, { content: [{ text }] }, or other shapes
+  const text = typeof r === "string" ? r
+    : r?.text || r?.content?.[0]?.text || r?.output || JSON.stringify(r || "");
+  const match = text.match(/Ref:\s*(artifact:\/\/\S+)/);
+  return match ? match[1] : `artifact://${basename(_i.file_path || "unknown")}`;
+}
+
 const CLASSIFICATIONS: Record<string, ToolClassification> = {
-  // Filesystem
-  read:              { type: "READ",  uri: (i) => `file://${i.file_path || i.path || "unknown"}` },
-  write:             { type: "WRITE", uri: (i) => `file://${i.file_path || i.path || "unknown"}` },
-  edit:              { type: "WRITE", uri: (i) => `file://${i.file_path || "unknown"}` },
+  // Filesystem — basename only to avoid session-path noise in lineage
+  read:              { type: "READ",  uri: (i) => `file://${basename(i.file_path || i.path || "unknown")}` },
+  write:             { type: "WRITE", uri: (i) => `file://${basename(i.file_path || i.path || "unknown")}` },
+  edit:              { type: "WRITE", uri: (i) => `file://${basename(i.file_path || "unknown")}` },
 
   // Research tools
   web_search:        { type: "READ",  uri: (i) => `web://search?q=${encodeURIComponent(i.query || "")}` },
@@ -22,14 +35,15 @@ const CLASSIFICATIONS: Record<string, ToolClassification> = {
 
   // Workproduct tools
   record_finding:    { type: "WRITE", uri: (i) => `workproduct://findings/${i.id || "unknown"}` },
+  record_report:     { type: "WRITE", uri: (i) => `workproduct://reports/${i.title || i.name || "unknown"}` },
   record_metric:     { type: "WRITE", uri: (i) => `workproduct://metrics/${i.name || "unknown"}` },
   record_query_result: { type: "WRITE", uri: (i) => `workproduct://queries/${i.name || "unknown"}` },
   record_chart:      { type: "WRITE", uri: (i) => `workproduct://charts/${i.name || "unknown"}` },
   record_dataset_ref: { type: "WRITE", uri: (i) => `workproduct://datasets/${i.name || "unknown"}` },
   write_artifact:    { type: "WRITE", uri: (i) => `artifact://${i.name || "unknown"}` },
-  publish_artifact:  { type: "WRITE", uri: (i) => `artifact://${i.file_path || "unknown"}` },
-  read_artifact:     { type: "READ",  uri: (i) => `artifact://${i.id || "unknown"}` },
-  list_artifacts:    { type: "READ",  uri: () => `artifact://list` },
+  publish_artifact:  { type: "WRITE", uri: (i, r) => extractArtifactRef(i, r) },
+  read_artifact:     { type: "READ",  uri: (i) => `artifact://${basename(i.id || "unknown")}` },
+  list_artifacts:    { type: "COMPUTE", uri: () => `tool://list_artifacts` },
 
   // Subagent delegation
   subagent:          { type: "COMPUTE", uri: (i) => `agent://${i.agent || "unknown"}` },

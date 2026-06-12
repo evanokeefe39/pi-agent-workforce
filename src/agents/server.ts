@@ -34,6 +34,15 @@ const CWD = "/workspace/scratch";
 const MAX_PROMPT_RETRIES = parseInt(process.env.MAX_PROMPT_RETRIES || "2", 10);
 const SDK_MESSAGE_ROLE_ERROR = /Cannot continue from message role/;
 
+async function shutdownSession(session: any) {
+  try {
+    if (session.extensionRunner?.hasHandlers?.("session_shutdown")) {
+      await session.extensionRunner.emit({ type: "session_shutdown", reason: "complete" });
+    }
+  } catch {}
+  session.dispose();
+}
+
 const COST_REPORT_URL = process.env.COST_REPORT_URL || "";
 const COST_REPORT_KEY = process.env.COST_REPORT_KEY || "";
 const AGENT_ID = process.env.AGENT_ID || "";
@@ -184,7 +193,7 @@ function extractPrompt(body: any): string {
 
 // --- Process a single invocation ---
 
-async function processInvocation(body: any, requestId: string, requestStart: number, abortController: AbortController) {
+async function processInvocation(body: any, requestId: string, requestStart: number, abortController: AbortController, reqHeaders?: Record<string, string>) {
   const run = runs.get(requestId);
   if (!run || run.status === "cancelled") {
     releaseSlot();
@@ -255,9 +264,22 @@ async function processInvocation(body: any, requestId: string, requestStart: num
   }
 
   const sessionId = session.sessionId;
+  process.env.PI_SESSION_DIR = sessionDir;
   await session.bindExtensions({});
   trackRun(requestId, { sessionDir });
   log("info", "session_created", { session_id: sessionId, session_dir: sessionDir, request_id: requestId, correlation_id: body.correlationId || null });
+
+  // Extract parent trace context from incoming HTTP headers.
+  // pi-otel parents pi.interaction off otelContext.active() during
+  // before_agent_start (fires synchronously in session.prompt).
+  // Wrapping prompt() in context.with() links this agent's trace
+  // to the caller's trace.
+  let parentCtx: any = null;
+  if (otelApi && reqHeaders?.traceparent) {
+    try {
+      parentCtx = otelApi.propagation.extract(otelApi.context.active(), reqHeaders);
+    } catch {}
+  }
 
   const usageByTurn: Array<{ provider: string; model: string; input: number; output: number; cacheRead: number }> = [];
   const toolCalls: Record<string, number> = {};
@@ -318,7 +340,11 @@ async function processInvocation(body: any, requestId: string, requestStart: num
         );
       });
 
-      await Promise.race([session.prompt(prompt), timeoutPromise, cancelPromise]);
+      const promptFn = () => session.prompt(prompt);
+      const promptCall = parentCtx && otelApi
+        ? otelApi.context.with(parentCtx, promptFn)
+        : promptFn();
+      await Promise.race([promptCall, timeoutPromise, cancelPromise]);
       clearTimeout(timeoutId);
       promptSuccess = true;
       break;
@@ -336,6 +362,7 @@ async function processInvocation(body: any, requestId: string, requestStart: num
           completedAt: new Date().toISOString(),
           error: err.message,
         });
+        await shutdownSession(session);
         activeAborts.delete(requestId);
         metrics.requests_active--;
         releaseSlot();
@@ -377,6 +404,7 @@ async function processInvocation(body: any, requestId: string, requestStart: num
             status: "failed", completedAt: new Date().toISOString(),
             error: `retry session failed: ${sessionErr.message} (original: ${err.message})`,
           });
+          await shutdownSession(session);
           activeAborts.delete(requestId);
           metrics.requests_active--;
           releaseSlot();
@@ -393,6 +421,7 @@ async function processInvocation(body: any, requestId: string, requestStart: num
       status: "failed", completedAt: new Date().toISOString(),
       error: `SDK message role error after ${MAX_PROMPT_RETRIES} attempts`,
     });
+    await shutdownSession(session);
     activeAborts.delete(requestId);
     metrics.requests_active--;
     releaseSlot();
@@ -434,12 +463,15 @@ async function processInvocation(body: any, requestId: string, requestStart: num
       status: "failed", completedAt: new Date().toISOString(), output,
       usage, sessionId, error: validation.errors.join("; "),
     });
+    await shutdownSession(session);
     releaseSlot();
     return;
   }
 
   trackRun(requestId, { status: "completed", completedAt: new Date().toISOString(), output, usage, sessionId });
+  await shutdownSession(session);
   releaseSlot();
+
 }
 
 // --- Fastify app ---
@@ -592,22 +624,9 @@ app.post("/invoke", async (req, reply) => {
 
   const body = req.body as any;
   const correlationId = body.correlationId || requestId;
-
-  // Extract OTel trace context from incoming HTTP headers
-  let parentCtx: any = null;
-  let invokeSpan: any = null;
-  if (otelApi && tracer) {
-    parentCtx = otelApi.propagation.extract(otelApi.context.active(), req.headers);
-    invokeSpan = tracer.startSpan(`${AGENT_NAME} invoke`, {
-      kind: otelApi.SpanKind.SERVER,
-      attributes: {
-        "http.method": "POST",
-        "http.url": "/invoke",
-        "agent.name": AGENT_NAME,
-        "request.id": requestId,
-      },
-    }, parentCtx);
-  }
+  const reqHeaders = Object.fromEntries(
+    Object.entries(req.headers).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v])
+  );
 
   const abortController = new AbortController();
   activeAborts.set(requestId, abortController);
@@ -631,14 +650,10 @@ app.post("/invoke", async (req, reply) => {
     .header("x-request-id", requestId)
     .send({ runId: requestId, status: "accepted" });
 
-  const invokeCtx = invokeSpan && otelApi
-    ? otelApi.trace.setSpan(parentCtx, invokeSpan)
-    : null;
-
   const runInvocation = async () => {
     try {
       await acquireSlot();
-      await processInvocation(body, requestId, requestStart, abortController);
+      await processInvocation(body, requestId, requestStart, abortController, reqHeaders);
     } catch (err) {
       log("error", "invocation_failed", { request_id: requestId, error: (err as Error).message });
       metrics.requests_active--;
@@ -646,19 +661,10 @@ app.post("/invoke", async (req, reply) => {
       activeAborts.delete(requestId);
       trackRun(requestId, { status: "failed", completedAt: new Date().toISOString(), error: (err as Error).message });
       releaseSlot();
-      if (invokeSpan && otelApi) {
-        invokeSpan.setStatus({ code: otelApi.SpanStatusCode.ERROR, message: (err as Error).message });
-      }
-    } finally {
-      if (invokeSpan) invokeSpan.end();
     }
   };
 
-  if (invokeCtx && otelApi) {
-    otelApi.context.with(invokeCtx, runInvocation);
-  } else {
-    runInvocation();
-  }
+  runInvocation();
 });
 
 // --- Startup ---

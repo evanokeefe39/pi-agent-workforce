@@ -1,14 +1,23 @@
 import type { InvokeRequest, InvokeResponse, StatusResponse, ResultResponse, DescribeResponse } from "./types.ts";
+import { randomBytes } from "node:crypto";
 
-let otelApi: any = null;
-import("@opentelemetry/api").then(m => { otelApi = m; }, () => {});
+let activeTraceId: string | null = null;
+
+export function setActiveTraceId(traceId: string) {
+  activeTraceId = traceId;
+}
+
+function makeTraceparent(): string | null {
+  if (!activeTraceId) return null;
+  const spanId = randomBytes(8).toString("hex");
+  return `00-${activeTraceId}-${spanId}-01`;
+}
 
 export async function invoke(baseUrl: string, request: InvokeRequest): Promise<InvokeResponse> {
   const url = `${baseUrl.replace(/\/+$/, "")}/invoke`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (otelApi) {
-    otelApi.propagation.inject(otelApi.context.active(), headers);
-  }
+  const traceparent = makeTraceparent();
+  if (traceparent) headers["traceparent"] = traceparent;
   const res = await fetch(url, {
     method: "POST",
     headers,

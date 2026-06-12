@@ -60,8 +60,14 @@ const JOB_NAMESPACE = "pi-workforce";
  */
 export function parseDatasetUri(uri: string): { namespace: string; name: string } {
   const idx = uri.indexOf("://");
-  if (idx === -1) return { namespace: "unknown", name: uri };
-  return { namespace: uri.slice(0, idx), name: uri.slice(idx + 3) };
+  if (idx === -1) return { namespace: "unknown", name: uri.slice(0, 255) };
+  return { namespace: uri.slice(0, idx), name: uri.slice(idx + 3, idx + 3 + 255) };
+}
+
+function toUUID(id: string): string {
+  const hex = id.replace(/-/g, "");
+  if (hex.length !== 32) return id;
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**
@@ -97,7 +103,7 @@ export function buildRunEvent(opts: BuildRunEventOpts): RunEvent {
     producer: PRODUCER,
     schemaURL: SCHEMA_URL,
     run: {
-      runId: opts.runId,
+      runId: toUUID(opts.runId),
       facets: Object.keys(runFacets).length > 0 ? runFacets : undefined,
     },
     job: {

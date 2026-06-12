@@ -20,10 +20,11 @@ COPY extensions/provenance/ /root/.pi/agent/extensions/provenance/
 COPY extensions/tool-policy/ /root/.pi/agent/extensions/tool-policy/
 COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
+COPY extensions/context-compaction/ /root/.pi/agent/extensions/context-compaction/
 RUN pi extensions install || true
 RUN pi extensions list 2>/dev/null | head -30 || true
-RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && \
-    npm install @tintinweb/pi-tasks pi-subagents pi-otel pi-permission-system --legacy-peer-deps 2>&1 || true
+COPY pi-npm/package.json /root/.pi/agent/npm/package.json
+RUN cd /root/.pi/agent/npm && npm install --legacy-peer-deps 2>&1 || true
 ENV PI_OFFLINE=1
 ENV WORKSPACE_DIR=/workspace
 RUN mkdir -p /workspace
@@ -49,12 +50,13 @@ COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/subagent-http/ /root/.pi/agent/extensions/subagent-http/
 COPY extensions/provenance/ /root/.pi/agent/extensions/provenance/
 COPY extensions/tool-policy/ /root/.pi/agent/extensions/tool-policy/
+COPY extensions/context-compaction/ /root/.pi/agent/extensions/context-compaction/
 RUN cd /root/.pi/agent/extensions/subagent-http && npm install --omit=dev 2>/dev/null || true
 COPY planner/.pi/agent/ /root/.pi/agent/
 COPY planner/agent.json /app/planner/agent.json
 RUN pi extensions install || true
-RUN mkdir -p /root/.pi/agent/npm && cd /root/.pi/agent/npm && npm init -y && \
-    npm install @tintinweb/pi-tasks pi-subagents pi-otel pi-permission-system --legacy-peer-deps 2>&1 || true
+COPY pi-npm/package.json /root/.pi/agent/npm/package.json
+RUN cd /root/.pi/agent/npm && npm install --legacy-peer-deps 2>&1 || true
 ENV PI_OFFLINE=1
 RUN mkdir -p /workspace
 EXPOSE 8080
@@ -74,7 +76,8 @@ COPY ceo/agent.json /app/ceo/agent.json
 # ============================================================
 FROM base AS coder-deps
 RUN apt-get update && apt-get install -y --no-install-recommends chromium && rm -rf /var/lib/apt/lists/*
-RUN npm init -y && npm install playwright-core react react-dom tailwindcss @tailwindcss/cli esbuild
+COPY coder-deps/package.json /app/coder-deps/package.json
+RUN cd /app/coder-deps && npm install
 
 FROM coder-deps AS coder
 COPY coder/.pi/agent/ /root/.pi/agent/
@@ -101,7 +104,9 @@ COPY skills/platform-formats/ /root/.pi/agent/skills/platform-formats/
 FROM base AS researcher-deps
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip && rm -rf /var/lib/apt/lists/*
 RUN pip3 install --break-system-packages "scrapling[fetchers]"
-RUN npm install -g cheerio
+COPY researcher-deps/package.json /app/vendor/package.json
+RUN cd /app/vendor && npm install
+ENV NODE_PATH=/app/vendor/node_modules
 
 FROM researcher-deps AS researcher
 COPY researcher/.pi/agent/ /root/.pi/agent/
@@ -117,8 +122,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon0 libxcomposite1 libxdamage1 libxrandr2 libgbm1 \
     libpango-1.0-0 libcairo2 libasound2 fonts-liberation fonts-noto-color-emoji \
   && rm -rf /var/lib/apt/lists/*
-RUN scrapling install
-RUN npm install -g @duckdb/node-api
+RUN python3 -m playwright install --with-deps chromium
+COPY data-deps/package.json /app/vendor-data/package.json
+RUN cd /app/vendor-data && npm install
+ENV NODE_PATH=/app/vendor/node_modules:/app/vendor-data/node_modules
 RUN pip3 install --break-system-packages duckdb
 
 FROM data-deps AS data
