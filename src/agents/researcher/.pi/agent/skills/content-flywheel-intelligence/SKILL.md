@@ -31,7 +31,7 @@ Ingest long-form content (transcripts, papers, documentation, podcast episodes) 
 
 ## Output Format Contract
 
-All research output is published as JSONL dataset artifacts via `write_artifact` with type `dataset`. Each line is a self-contained finding:
+All research output is published as JSONL dataset artifacts via `publish_artifact` with type `dataset`. Each line is a self-contained finding:
 
 ```json
 {"type": "finding", "finding": "text of the insight", "grade": "B2", "source": "description of source", "context": "methodology or sample size", "tags": ["tag1", "tag2"]}

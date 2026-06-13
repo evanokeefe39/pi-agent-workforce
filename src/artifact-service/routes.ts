@@ -8,14 +8,8 @@ import {
   findByContentHash,
   listArtifacts,
   updateMetadata,
-  insertEdges,
-  getAncestors,
-  getDescendants,
-  getEdgesByRunId,
   checkConnection as metastoreHealth,
 } from "./metastore";
-import type { EdgeType, EdgeInsert } from "./types";
-import { buildGraph, traceToSources, traceToOutputs, toProvJson } from "./graph";
 import { canRead, canWrite } from "./rbac";
 
 // ---------------------------------------------------------------------------
@@ -99,10 +93,9 @@ export async function handleWrite(
     );
   }
 
-  // Dedup: if identical content already stored, still create lineage edges
+  // Dedup: if identical content already stored, return existing record
   const existing = await findByContentHash(hash);
   if (existing) {
-    await createLineageEdges(existing.id, existing.artifact_type, body.metadata);
     return Response.json({
       ref: buildUri(existing),
       id: existing.id,
@@ -141,8 +134,6 @@ export async function handleWrite(
     const msg = err instanceof Error ? err.message : "metadata insert failed";
     return errorResponse(`Postgres error: ${msg}`, 500);
   }
-
-  await createLineageEdges(record.id, record.artifact_type, body.metadata);
 
   return Response.json(
     {
@@ -302,215 +293,6 @@ export async function handleHealth(
   const [pg, s3] = await Promise.all([metastoreHealth(), storageHealth()]);
   const status = pg && s3 ? "ok" : "degraded";
   return Response.json({ status, postgres: pg, minio: s3 }, { status: 200 });
-}
-
-// ---------------------------------------------------------------------------
-// GET /lineage/:id
-// ---------------------------------------------------------------------------
-
-export async function handleLineage(
-  req: Request,
-  _agentName: string,
-): Promise<Response> {
-  const url = new URL(req.url);
-  const segments = url.pathname.split("/").filter(Boolean);
-  const id = segments[segments.length - 1];
-
-  if (!id) {
-    return errorResponse("missing artifact id", 400);
-  }
-
-  const depth = parseInt(url.searchParams.get("depth") ?? "10", 10);
-  const direction = url.searchParams.get("direction") ?? "both";
-
-  try {
-    const record = await getArtifactById(id);
-    if (!record) {
-      return errorResponse("artifact not found", 404);
-    }
-
-    const ancestors = direction === "descendants"
-      ? []
-      : await getAncestors(id, depth);
-    const descendants = direction === "ancestors"
-      ? []
-      : await getDescendants(id, depth);
-
-    const ancestorIds = [...new Set(ancestors.map(a => a.source_id))];
-    const descendantIds = [...new Set(descendants.map(d => d.target_id))];
-    const allIds = [...new Set([...ancestorIds, ...descendantIds])];
-
-    const artifacts: Record<string, ArtifactRecord> = {};
-    for (const aid of allIds) {
-      const a = await getArtifactById(aid);
-      if (a) artifacts[aid] = a;
-    }
-
-    return Response.json({
-      root: id,
-      ancestors: ancestors.map(a => ({
-        id: a.source_id,
-        depth: a.depth,
-        edge_type: a.edge_type,
-        artifact: artifacts[a.source_id] ?? null,
-      })),
-      descendants: descendants.map(d => ({
-        id: d.target_id,
-        depth: d.depth,
-        edge_type: d.edge_type,
-        artifact: artifacts[d.target_id] ?? null,
-      })),
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "lineage query failed";
-    return errorResponse(`Postgres error: ${msg}`, 500);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// GET /lineage/graph
-// ---------------------------------------------------------------------------
-
-export async function handleLineageGraph(
-  req: Request,
-  _agentName: string,
-): Promise<Response> {
-  const url = new URL(req.url);
-  const runId = url.searchParams.get("run_id");
-
-  if (!runId) {
-    return errorResponse("run_id query parameter required", 400);
-  }
-
-  const format = url.searchParams.get("format");
-
-  try {
-    const artifacts = await listArtifacts({ run_id: runId });
-    const edges = await getEdgesByRunId(runId);
-
-    if (format === "prov-json") {
-      const graph = await buildGraph(runId);
-      return Response.json(toProvJson(graph, artifacts));
-    }
-
-    const nodes = artifacts.map(a => ({
-      id: a.id,
-      agent_name: a.agent_name,
-      artifact_type: a.artifact_type,
-      filename: a.filename,
-      run_id: a.run_id,
-      created_at: a.created_at,
-    }));
-
-    const edgeList = edges.map(e => ({
-      source: e.source_id,
-      target: e.target_id,
-      type: e.edge_type,
-    }));
-
-    return Response.json({ nodes, edges: edgeList });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "graph query failed";
-    return errorResponse(`Postgres error: ${msg}`, 500);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// GET /lineage/trace/:id
-// ---------------------------------------------------------------------------
-
-export async function handleLineageTrace(
-  req: Request,
-  _agentName: string,
-): Promise<Response> {
-  const url = new URL(req.url);
-  const segments = url.pathname.split("/").filter(Boolean);
-  const id = segments[segments.length - 1];
-
-  if (!id) {
-    return errorResponse("missing artifact id", 400);
-  }
-
-  const direction = url.searchParams.get("direction") ?? "sources";
-
-  try {
-    const record = await getArtifactById(id);
-    if (!record) {
-      return errorResponse("artifact not found", 404);
-    }
-    if (!record.run_id) {
-      return errorResponse("artifact has no run_id, cannot build graph", 400);
-    }
-
-    const graph = await buildGraph(record.run_id);
-    const traceIds = direction === "outputs"
-      ? traceToOutputs(graph, id)
-      : traceToSources(graph, id);
-
-    const traced: Array<{ id: string; agent_name: string; artifact_type: string; filename: string }> = [];
-    for (const tid of traceIds) {
-      const a = await getArtifactById(tid);
-      if (a) {
-        traced.push({
-          id: a.id,
-          agent_name: a.agent_name,
-          artifact_type: a.artifact_type,
-          filename: a.filename,
-        });
-      }
-    }
-
-    return Response.json({ root: id, direction, traced });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "trace query failed";
-    return errorResponse(`Postgres error: ${msg}`, 500);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Lineage helpers
-// ---------------------------------------------------------------------------
-
-const EDGE_TYPE_MAP: Record<string, Record<string, EdgeType>> = {
-  report: { dataset: "derived_from", research: "derived_from", _default: "informed_by" },
-  brief: { dataset: "derived_from", research: "derived_from", _default: "informed_by" },
-  dataset: { _default: "contains" },
-};
-
-function inferEdgeType(targetType: string, _sourceType: string): EdgeType {
-  const mapping = EDGE_TYPE_MAP[targetType];
-  if (!mapping) return "informed_by";
-  return mapping[_sourceType] ?? mapping._default ?? "informed_by";
-}
-
-async function createLineageEdges(
-  targetId: string,
-  targetType: string,
-  metadata?: Record<string, unknown>,
-): Promise<void> {
-  const lineage = metadata?.lineage as
-    | { inputs?: string[]; method?: string }
-    | undefined;
-  const inputs = lineage?.inputs;
-  if (!inputs?.length) return;
-
-  const edges: EdgeInsert[] = [];
-  for (const sourceId of inputs) {
-    const source = await getArtifactById(sourceId);
-    const sourceType = source?.artifact_type ?? "unknown";
-    edges.push({
-      source_id: sourceId,
-      target_id: targetId,
-      edge_type: inferEdgeType(targetType, sourceType),
-    });
-  }
-
-  try {
-    await insertEdges(edges);
-  } catch (err) {
-    // Edge creation failure is non-fatal — log but don't fail the write
-    console.error(`lineage edge creation failed: ${err instanceof Error ? err.message : err}`);
-  }
 }
 
 // ---------------------------------------------------------------------------

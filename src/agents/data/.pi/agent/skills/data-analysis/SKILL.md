@@ -134,7 +134,7 @@ Writer expects structured fields it can reference — not raw SQL output or mark
 ## Anti-Patterns
 
 - **AP1: Estimating when you can compute.** "Approximately 50%" when exact count is `SELECT COUNT(*)` away. Always compute.
-- **AP2: Markdown tables as final output.** Always `record_query_result` + `write_artifact`. Markdown is for human notes, not deliverables.
+- **AP2: Markdown tables as final output.** Always `record_query_result` + `publish_artifact`. Markdown is for human notes, not deliverables.
 - **AP3: Orphan computation.** Running `duckdb_query` but not calling `record_query_result`. Every meaningful query gets recorded.
 - **AP4: Skipping DISCOVER phase.** Querying before understanding schema leads to wrong column names, type mismatches, and wasted turns.
 - **AP5: Single mega-query.** One 50-line SQL that does everything. Decompose into steps: each step produces one `record_query_result`, is independently validatable, and can be replanned if results are unexpected.

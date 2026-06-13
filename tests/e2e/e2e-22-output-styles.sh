@@ -21,7 +21,7 @@ Write Instagram carousel copy (10 slides) about the top 5 productivity hacks for
 
 Format: Slide 1 = hook (bold claim, max 15 words). Slides 2-9 = one hack per slide, headline (max 8 words) + body (max 30 words). Slide 10 = CTA (follow + save). Separate caption block with 2-3 sentences + 15-20 hashtags.
 
-Publish via write_artifact with type brief and filename ig-carousel-productivity.md.
+Publish via publish_artifact with type brief and filename ig-carousel-productivity.md.
 
 This is social media copy, NOT a report. Short. Punchy. Visual-first.' 300 ig)
 
@@ -30,20 +30,20 @@ IG_TURNS=$(jsonl_turns "$IG_EVENTS")
 # --- Style 2: Executive Brief ---
 echo ""; echo "--- Style 2: Executive Brief ---"
 BRIEF_EVENTS=$(pi_run 'First delegate to the researcher agent:
-Quick research: find 3 key trends in remote work for 2026. Use web_search. Record each via record_finding with style intelligence. Publish summary via write_artifact type research.
+Quick research: find 3 key trends in remote work for 2026. Use web_search. Record each via record_finding with style intelligence. Publish summary via publish_artifact type research.
 
 Then delegate to the writer agent:
-Write an executive brief (500-800 words) on remote work trends for 2026. Read the researcher output. Structure: 1-sentence executive summary, 3 trend sections (150-200 words each), 3-bullet action items. Publish via write_artifact type report filename remote-work-brief.md. doc_style: briefing' 300 brief)
+Write an executive brief (500-800 words) on remote work trends for 2026. Read the researcher output. Structure: 1-sentence executive summary, 3 trend sections (150-200 words each), 3-bullet action items. Publish via publish_artifact type report filename remote-work-brief.md. doc_style: briefing' 300 brief)
 
 BRIEF_TURNS=$(jsonl_turns "$BRIEF_EVENTS")
 
 # --- Style 3: Research Report ---
 echo ""; echo "--- Style 3: Research Report ---"
 REPORT_EVENTS=$(pi_run 'First delegate to the researcher agent:
-Deep research on AI agent orchestration frameworks in 2026. Compare at least 4 frameworks. For each, use record_finding (style: intelligence) for: name, architecture type, transport mechanism, language support, maturity. At least 15 findings. Publish JSONL via write_artifact type dataset. Publish summary via write_artifact type research.
+Deep research on AI agent orchestration frameworks in 2026. Compare at least 4 frameworks. For each, use record_finding (style: intelligence) for: name, architecture type, transport mechanism, language support, maturity. At least 15 findings. Publish JSONL via publish_artifact type dataset. Publish summary via publish_artifact type research.
 
 Then delegate to the writer agent:
-Write comprehensive research report (3000-5000 words) comparing AI agent orchestration frameworks. Read researcher output. Include: abstract, methodology, per-framework analysis, comparison table, recommendations. Publish via write_artifact type report filename ai-orchestration-report.md. doc_style: report' 600 report)
+Write comprehensive research report (3000-5000 words) comparing AI agent orchestration frameworks. Read researcher output. Include: abstract, methodology, per-framework analysis, comparison table, recommendations. Publish via publish_artifact type report filename ai-orchestration-report.md. doc_style: report' 600 report)
 
 REPORT_TURNS=$(jsonl_turns "$REPORT_EVENTS")
 REPORT_FINDINGS=$(artifact_findings_count "artifact_type=dataset")

@@ -1,0 +1,9 @@
+{
+  "name": "pi-data-deps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Data agent Node.js dependencies (DuckDB for SQL analysis)",
+  "dependencies": {
+    "@duckdb/node-api": "*"
+  }
+}

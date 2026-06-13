@@ -14,8 +14,19 @@
     "heartbeat": { "enabled": false, "intervalSec": 300, "wakeOnDemand": true, "cooldownSec": 30, "maxConcurrentRuns": 3 },
     "validation": {
       "maxTurns": 60,
-      "requiredTools": ["record_finding", "write_artifact"],
+      "requiredTools": ["record_finding", "publish_artifact"],
       "requiredArtifactType": "dataset"
+    },
+    "toolPolicy": {
+      "write": "block",
+      "edit": "block",
+      "record_finding": "allow",
+      "publish_artifact": "allow",
+      "read": "allow",
+      "bash": "allow",
+      "web_search": "allow",
+      "deep_research": "allow",
+      "scrape_apify": "allow"
     }
   }
 }

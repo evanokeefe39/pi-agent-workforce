@@ -1,14 +1,9 @@
 import type { InvokeRequest, InvokeResponse, StatusResponse, ResultResponse, DescribeResponse } from "./types.ts";
 
-let otelApi: any = null;
-import("@opentelemetry/api").then(m => { otelApi = m; }, () => {});
-
-export async function invoke(baseUrl: string, request: InvokeRequest): Promise<InvokeResponse> {
+export async function invoke(baseUrl: string, request: InvokeRequest, traceparent?: string | null): Promise<InvokeResponse> {
   const url = `${baseUrl.replace(/\/+$/, "")}/invoke`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (otelApi) {
-    otelApi.propagation.inject(otelApi.context.active(), headers);
-  }
+  if (traceparent) headers["traceparent"] = traceparent;
   const res = await fetch(url, {
     method: "POST",
     headers,

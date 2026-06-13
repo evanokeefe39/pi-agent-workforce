@@ -1,0 +1,12 @@
+{
+  "name": "pi-agent-npm-extensions",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pi SDK runtime extensions installed to /root/.pi/agent/npm/",
+  "dependencies": {
+    "@tintinweb/pi-tasks": "*",
+    "pi-subagents": "*",
+    "pi-otel": "*",
+    "pi-permission-system": "*"
+  }
+}

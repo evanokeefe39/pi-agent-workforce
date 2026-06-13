@@ -1,0 +1,9 @@
+{
+  "rules": [
+    {
+      "match": ".*",
+      "thresholdChars": 2000,
+      "summaryChars": 800
+    }
+  ]
+}

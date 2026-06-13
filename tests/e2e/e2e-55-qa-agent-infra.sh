@@ -82,8 +82,8 @@ fi
 
 # B5: agent.json requiredTools includes evaluation tools
 REQ_TOOLS=$(jq -r '.runtimeConfig.validation.requiredTools[]?' "$AJ" 2>/dev/null | tr '\n' ',')
-if echo "$REQ_TOOLS" | grep -q "record_violation" && echo "$REQ_TOOLS" | grep -q "write_artifact"; then
-  pass "B5: agent.json requiredTools includes record_violation and write_artifact"
+if echo "$REQ_TOOLS" | grep -q "record_violation" && echo "$REQ_TOOLS" | grep -q "publish_artifact"; then
+  pass "B5: agent.json requiredTools includes record_violation and publish_artifact"
 else
   fail "B5: agent.json requiredTools incomplete: $REQ_TOOLS"
 fi

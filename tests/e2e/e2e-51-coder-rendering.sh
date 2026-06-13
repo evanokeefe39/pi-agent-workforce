@@ -120,7 +120,7 @@ SNAP=$(artifact_snapshot)
 
 RUN_ID=$(curl -sf -X POST "$CODER_URL/invoke" \
   -H "Content-Type: application/json" \
-  -d '{"task":"Render a single Instagram carousel title slide as PNG. Title: Top 5 AI Coding Tools, subtitle: 2026 Edition. Steps: (1) Read /project/design-system/tokens.css for brand colors. Dark theme bg 0D1117, accent 58A6FF, text F0F6FC. (2) Write an HTML file with the slide design. (3) Use playwright-core with chromium at /usr/bin/chromium (executablePath option, args no-sandbox) to screenshot at viewport 1080x1350. Save PNG to output/slide-1.png. (4) Publish via write_artifact with file_path=output/slide-1.png (not content). Set type=image. Do NOT run npx playwright install."}' \
+  -d '{"task":"Render a single Instagram carousel title slide as PNG. Title: Top 5 AI Coding Tools, subtitle: 2026 Edition. Steps: (1) Read /project/design-system/tokens.css for brand colors. Dark theme bg 0D1117, accent 58A6FF, text F0F6FC. (2) Write an HTML file with the slide design. (3) Use playwright-core with chromium at /usr/bin/chromium (executablePath option, args no-sandbox) to screenshot at viewport 1080x1350. Save PNG to output/slide-1.png. (4) Publish via publish_artifact with file_path=output/slide-1.png (not content). Set type=image. Do NOT run npx playwright install."}' \
   | jq -r '.runId')
 
 if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then

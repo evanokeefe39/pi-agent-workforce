@@ -272,7 +272,7 @@ added 2 packages, and audited 97 packages in 3s
 
 ## OPEN: Migrate E2E tests from bash to Bun/TypeScript
 
-**Status:** E2E-30 migrated, remaining tests not started
+**Status:** E2E-30 migrated, dead lineage tests deleted, remaining tests in progress
 **Severity:** Medium — test brittleness blocks reliable CI and pipeline validation
 
 **Problem:** E2E tests written in bash (jsonl-helpers.sh + per-test .sh scripts) are fragile. E2E-30 fails silently due to shell limitations, not actual pipeline failures.

@@ -1,0 +1,14 @@
+{
+  "name": "pi-coder-toolchain",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Coder agent rendering toolchain (Playwright, React, Tailwind, esbuild)",
+  "dependencies": {
+    "playwright-core": "*",
+    "react": "*",
+    "react-dom": "*",
+    "tailwindcss": "*",
+    "@tailwindcss/cli": "*",
+    "esbuild": "*"
+  }
+}

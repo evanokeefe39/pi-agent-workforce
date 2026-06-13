@@ -1,0 +1,9 @@
+{
+  "name": "pi-researcher-deps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Researcher agent Node.js dependencies (scraping/parsing)",
+  "dependencies": {
+    "cheerio": "*"
+  }
+}

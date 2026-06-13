@@ -68,9 +68,9 @@ Not every rule needs a commendation — only record commendations for rules wher
 
 After all domains evaluated:
 1. Call `export_evaluations_jsonl` to build the JSONL string
-2. Call `write_artifact` with type `dataset` to publish the violations + commendations as a JSONL artifact
+2. Call `publish_artifact` with type `dataset` to publish the violations + commendations as a JSONL artifact
 3. Call `record_artifact_review` with the overall verdict, metrics (critical/major/minor counts), and narrative verdict text
-4. Call `write_artifact` with type `report` to publish a human-readable verdict summary
+4. Call `publish_artifact` with type `report` to publish a human-readable verdict summary
 
 ### 6. Update Tasks
 

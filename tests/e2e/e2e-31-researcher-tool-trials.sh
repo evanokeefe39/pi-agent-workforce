@@ -18,7 +18,7 @@ TASK='Research 3 faceless Instagram accounts in the tech/AI niche. For each acco
 - Identify their content format (carousels, reels, static posts)
 - Note their posting frequency
 
-Record each account as a separate finding via record_finding. Publish all findings as JSONL via write_artifact with type dataset.'
+Record each account as a separate finding via record_finding. Publish all findings as JSONL via publish_artifact with type dataset.'
 
 # --- Helper: run one trial against researcher directly ---
 run_trial() {
@@ -154,7 +154,7 @@ You MUST follow this workflow for EVERY research task:
 
 1. For social media profiles: call list_actors to find scrapers, then scrape_apify for first-party data
 2. Record EVERY factual claim via record_finding with ADMIRALTY grades
-3. When done: query_findings → get_finding for each → write_artifact as JSONL (type dataset)
+3. When done: query_findings → get_finding for each → publish_artifact as JSONL (type dataset)
 
 Do NOT skip these steps. Do NOT write markdown reports instead of structured findings.
 

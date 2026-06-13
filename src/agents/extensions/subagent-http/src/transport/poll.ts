@@ -71,19 +71,21 @@ export async function pollUntilDone(opts: PollOptions): Promise<PollResult> {
         }
       }
 
-      if (state === "completed" || state === "failed") {
+      const terminal = state === "completed" || state === "failed" || state === "cancelled" || state === "timeout";
+      if (terminal) {
+        const mappedState = (state === "cancelled" ? "cancelled" : state === "timeout" ? "timeout" : state) as PollResult["state"];
         try {
           const result = await getResult(opts.baseUrl, opts.runId);
           return {
-            state: result.state as "completed" | "failed",
+            state: mappedState,
             result,
             error: result.error ?? undefined,
             durationMs: Date.now() - start,
           };
         } catch {
           return {
-            state: state as "completed" | "failed",
-            error: state === "failed" ? "Failed (result fetch error)" : undefined,
+            state: mappedState,
+            error: state !== "completed" ? `${state} (result fetch error)` : undefined,
             durationMs: Date.now() - start,
           };
         }

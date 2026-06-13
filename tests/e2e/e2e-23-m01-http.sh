@@ -22,12 +22,12 @@ EVENTS=$(pi_run 'You have remote agents available via the subagent tool. Use sub
 Task: Faceless social media channel analysis.
 
 Step 1 — Parallel research (delegate BOTH to researcher using tasks parameter):
-Task A: "Research 5 faceless Instagram accounts across niches (fitness, finance, motivation, cooking, tech). For EACH account: use scrape_apify for verified metrics, use web_search for growth strategy. Create findings via record_finding (style: intelligence) for: follower count, engagement rate, content format, posting frequency, monetization. Minimum 15 findings total. Publish JSONL via write_artifact type dataset. Publish markdown summary via write_artifact type research."
+Task A: "Research 5 faceless Instagram accounts across niches (fitness, finance, motivation, cooking, tech). For EACH account: use scrape_apify for verified metrics, use web_search for growth strategy. Create findings via record_finding (style: intelligence) for: follower count, engagement rate, content format, posting frequency, monetization. Minimum 15 findings total. Publish JSONL via publish_artifact type dataset. Publish markdown summary via publish_artifact type research."
 
-Task B: "Research 5 faceless TikTok accounts across niches (fitness, finance, motivation, cooking, tech). Same methodology. Minimum 15 findings. Publish via write_artifact."
+Task B: "Research 5 faceless TikTok accounts across niches (fitness, finance, motivation, cooking, tech). Same methodology. Minimum 15 findings. Publish via publish_artifact."
 
 Step 2 — Report (delegate to writer):
-"Write cross-platform comparison report. Read researcher artifacts. Include: per-account cards with metrics, comparison table, top 5 actionable insights, ADMIRALTY quality assessment. Publish via write_artifact type report filename m01-faceless-channel-report.md. doc_style: report"
+"Write cross-platform comparison report. Read researcher artifacts. Include: per-account cards with metrics, comparison table, top 5 actionable insights, ADMIRALTY quality assessment. Publish via publish_artifact type report filename m01-faceless-channel-report.md. doc_style: report"
 
 Execute step 1 (parallel), wait for results, then step 2.' 900 m01)
 

@@ -19,7 +19,7 @@ SHALLOW_START=$SECONDS
 
 SHALLOW_EVENTS=$(pi_run 'Use subagent to delegate to the researcher agent:
 
-Quick scan: find 3 faceless Instagram accounts in the fitness niche. For each, note the account name and approximate follower count. Use web_search only (no scraping). Record each account as a finding via record_finding with style intelligence. Publish findings via write_artifact with type research.
+Quick scan: find 3 faceless Instagram accounts in the fitness niche. For each, note the account name and approximate follower count. Use web_search only (no scraping). Record each account as a finding via record_finding with style intelligence. Publish findings via publish_artifact with type research.
 
 This is a SHALLOW scan — speed over depth. 3 accounts, basic metrics only.' 180 shallow)
 
@@ -44,8 +44,8 @@ Deep research: Analyze 5 faceless Instagram accounts in the fitness niche. For E
 3. Create separate findings via record_finding (style: intelligence) for: follower count (A1), engagement rate, content format, posting frequency, monetization method
 4. Minimum 3-5 findings PER account (15-25 total)
 5. Cross-reference metrics from Apify (A1) with web sources (C3)
-6. Publish all findings as JSONL via write_artifact type dataset
-7. Publish markdown analysis via write_artifact type research
+6. Publish all findings as JSONL via publish_artifact type dataset
+7. Publish markdown analysis via publish_artifact type research
 
 DEEP analysis — thoroughness over speed. Do not stop until 15+ structured findings.' 600 deep)
 

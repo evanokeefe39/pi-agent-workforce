@@ -131,7 +131,7 @@ SNAP_C=$(artifact_snapshot)
 
 RUN_C=$(curl -sf -X POST "$DATA_URL/invoke" \
   -H "Content-Type: application/json" \
-  -d "{\"task\":\"Create a simple dataset analysis. Write the text '{\\\"metric\\\":\\\"test\\\",\\\"value\\\":42}' as a JSONL file via write_artifact with type dataset and name test-replication.jsonl.\"}" \
+  -d "{\"task\":\"Create a simple dataset analysis. Write the text '{\\\"metric\\\":\\\"test\\\",\\\"value\\\":42}' as a JSONL file via publish_artifact with type dataset and name test-replication.jsonl.\"}" \
   | jq -r '.runId')
 
 if [ -z "$RUN_C" ] || [ "$RUN_C" = "null" ]; then
@@ -172,7 +172,7 @@ SNAP_D=$(artifact_snapshot)
 
 RUN_D=$(curl -sf -X POST "$DATA_URL/invoke" \
   -H "Content-Type: application/json" \
-  -d '{"task":"Record a query result: sql=\"SELECT 1 AS x\", engine=duckdb, row_count=1, materialized_at=\"2026-06-09T00:00:00Z\", columns=[{name:\"x\",type:\"integer\"}], rows_inline=[{x:1}]. Then write_artifact name=session-test.jsonl content={\"test\":true} type=dataset."}' \
+  -d '{"task":"Record a query result: sql=\"SELECT 1 AS x\", engine=duckdb, row_count=1, materialized_at=\"2026-06-09T00:00:00Z\", columns=[{name:\"x\",type:\"integer\"}], rows_inline=[{x:1}]. Then publish_artifact name=session-test.jsonl content={\"test\":true} type=dataset."}' \
   | jq -r '.runId')
 
 if [ -z "$RUN_D" ] || [ "$RUN_D" = "null" ]; then

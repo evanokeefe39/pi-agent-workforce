@@ -74,7 +74,7 @@ SNAP_B=$(artifact_snapshot)
 RUN_B=$(curl -sf -X POST "$DATA_URL/invoke" \
   -H "Content-Type: application/json" \
   -d "$(jq -n --arg csv "$CSV_DATA" '{
-    task: ("Analyze this engagement data. Use duckdb_query to compute save_rate (saves/views*100) and likes_per_post for each account. Record results via record_query_result, derive summary metrics via record_metric, then publish as JSONL via write_artifact (type: dataset).\n\nDATA (CSV):\n" + $csv)
+    task: ("Analyze this engagement data. Use duckdb_query to compute save_rate (saves/views*100) and likes_per_post for each account. Record results via record_query_result, derive summary metrics via record_metric, then publish as JSONL via publish_artifact (type: dataset).\n\nDATA (CSV):\n" + $csv)
   }')" \
   | jq -r '.runId')
 
