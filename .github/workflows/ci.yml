@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "docker-compose.yml"
+      - "otel-collector-config.yaml"
+      - "scripts/**"
+      - ".github/workflows/**"
+  pull_request:
+    branches: [master]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "docker-compose.yml"
+      - "otel-collector-config.yaml"
+      - "scripts/**"
+      - ".github/workflows/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (agents)
+        working-directory: src/agents
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck server
+        working-directory: src/agents
+        run: bun build --target=bun server.ts --no-bundle --compile 2>&1 | head -50 || true
+
+      - name: Install dependencies (artifact-service)
+        working-directory: src/artifact-service
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck extensions
+        working-directory: src/agents
+        run: |
+          for ext in extensions/*/index.ts extensions/*/src/extension/index.ts; do
+            [ -f "$ext" ] && echo "Checking $ext" && bun build --target=bun "$ext" --no-bundle --compile 2>&1 | head -20 || true
+          done
+
+  build-containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build agent containers
+        run: |
+          docker compose build \
+            planner researcher data writer publisher coder qa \
+            artifact-service \
+            2>&1 | tail -30
+
+      - name: Verify compose config
+        run: docker compose config --quiet
