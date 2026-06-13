@@ -2,6 +2,17 @@
 Never use powershell
 Never use the Workflow tool (dynamic workflows). Too token-expensive. Use Agent tool or direct research instead.
 
+## Git conventions
+
+master is protected. No direct commits. All changes go through PRs with squash merge.
+
+- Branch naming: `feat/`, `fix/`, `refactor/`, `chore/`, `docs/` prefixes
+- PR titles use conventional commits: `feat: add X`, `fix: Y broken`, `refactor: simplify Z`
+- Squash merge only — GitHub enforces this, merge commits and rebase are disabled
+- Branches auto-delete after merge
+- Never use `git merge` to land on master. Always `gh pr create` + `gh pr merge --squash`
+- Keep branches short-lived. One feature or fix per branch.
+
 ## What this is
 
 Multi-agent workforce — Pi agents in Docker containers orchestrated via pi-subagents-http. Planner decomposes goals, delegates to specialist agents (researcher, data, writer), assesses quality, iterates. Evolved from `paperclip-eval` repo.
