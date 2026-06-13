@@ -19,10 +19,10 @@ import { SubagentHttpParams } from "./schemas.ts";
 import { loadConfig } from "./config.ts";
 import type { AgentEndpoint, RemoteRun, RemoteRunState, ResultResponse } from "../transport/types.ts";
 import { listAgents } from "../transport/config.ts";
-import { invoke, getStatus, getResult, cancelRun, setActiveTraceId } from "../transport/http-client.ts";
+import { invoke, getStatus, getResult, cancelRun } from "../transport/http-client.ts";
 import { AgentMonitor } from "../transport/agent-monitor.ts";
 import { pollUntilDone, type PollResult } from "../transport/poll.ts";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import { JobTracker } from "../transport/job-tracker.ts";
 
 export { loadConfig } from "./config.ts";
@@ -56,9 +56,17 @@ export default function registerSubagentHttpExtension(pi: ExtensionAPI): void {
   const tracker = new JobTracker(pollIntervalMs);
   const monitor = new AgentMonitor(config);
 
+  let sessionTraceId: string | null = null;
+
   pi.events.on("pi-otel:trace-active", (data: any) => {
-    if (data?.traceId) setActiveTraceId(data.traceId);
+    if (data?.traceId) sessionTraceId = data.traceId;
   });
+
+  function makeTraceparent(): string | null {
+    if (!sessionTraceId) return null;
+    const spanId = randomBytes(8).toString("hex");
+    return `00-${sessionTraceId}-${spanId}-01`;
+  }
 
   function resolveAgent(name: string): AgentEndpoint | undefined {
     const lower = name.toLowerCase();
@@ -216,7 +224,7 @@ OPTIONAL:
           const endpoint = resolveAgent(t.agent);
           if (!endpoint) return { agent: t.agent, error: `Unknown agent: ${t.agent}` } as const;
           try {
-            const resp = await invoke(endpoint.url, { task: t.task, context: params.context, correlationId: parentSessionId });
+            const resp = await invoke(endpoint.url, { task: t.task, context: params.context, correlationId: parentSessionId }, makeTraceparent());
             return { agent: t.agent, endpoint, runId: resp.runId } as const;
           } catch (err) {
             return { agent: t.agent, error: err instanceof Error ? err.message : String(err) } as const;
@@ -296,7 +304,7 @@ OPTIONAL:
         let resp;
         try {
           const correlationId = ctx?.sessionManager?.getSessionId?.() || randomUUID();
-          resp = await invoke(endpoint.url, { task: params.task, context: params.context, correlationId });
+          resp = await invoke(endpoint.url, { task: params.task, context: params.context, correlationId }, makeTraceparent());
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           return {

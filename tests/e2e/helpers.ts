@@ -130,6 +130,117 @@ export async function requireAgents(
   console.log("  All agents healthy.");
 }
 
+// --- Generic agent invoke + poll ---
+
+export interface AgentRunResult {
+  runId: string;
+  result: RunResult;
+  durationSec: number;
+}
+
+export async function agentRun(
+  agentUrl: string,
+  task: string,
+  timeoutMs = 300_000,
+): Promise<AgentRunResult> {
+  const start = Date.now();
+
+  const invokeResp = await fetch(`${agentUrl}/invoke`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task }),
+  });
+
+  if (!invokeResp.ok) {
+    throw new Error(`Agent invoke failed: ${invokeResp.status} ${await invokeResp.text()}`);
+  }
+
+  const { runId } = (await invokeResp.json()) as InvokeResponse;
+
+  const deadline = Date.now() + timeoutMs;
+  let pollInterval = 5_000;
+
+  while (Date.now() < deadline) {
+    await Bun.sleep(pollInterval);
+
+    try {
+      const statusResp = await fetch(`${agentUrl}/status/${runId}`);
+      if (statusResp.ok) {
+        const status = (await statusResp.json()) as StatusResponse;
+        if (status.state !== "running" && status.state !== "queued") break;
+      }
+    } catch {
+      // transient fetch error
+    }
+
+    const elapsed = Date.now() - start;
+    if (elapsed > 120_000) pollInterval = 10_000;
+  }
+
+  const resultResp = await fetch(`${agentUrl}/result/${runId}`);
+  if (!resultResp.ok) {
+    throw new Error(`Agent result fetch failed: ${resultResp.status}`);
+  }
+
+  const result = (await resultResp.json()) as RunResult;
+  const durationSec = Math.round((Date.now() - start) / 1000);
+
+  return { runId, result, durationSec };
+}
+
+export async function agentInvoke(
+  agentUrl: string,
+  task: string,
+): Promise<string> {
+  const resp = await fetch(`${agentUrl}/invoke`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task }),
+  });
+  if (!resp.ok) throw new Error(`Invoke failed: ${resp.status}`);
+  const { runId } = (await resp.json()) as InvokeResponse;
+  return runId;
+}
+
+export async function agentPollUntilDone(
+  agentUrl: string,
+  runId: string,
+  timeoutMs = 300_000,
+): Promise<RunResult> {
+  const deadline = Date.now() + timeoutMs;
+  let pollInterval = 5_000;
+  const start = Date.now();
+
+  while (Date.now() < deadline) {
+    await Bun.sleep(pollInterval);
+    try {
+      const resp = await fetch(`${agentUrl}/status/${runId}`);
+      if (resp.ok) {
+        const status = (await resp.json()) as StatusResponse;
+        if (status.state !== "running" && status.state !== "queued") break;
+      }
+    } catch { /* retry */ }
+
+    if (Date.now() - start > 120_000) pollInterval = 10_000;
+  }
+
+  const resp = await fetch(`${agentUrl}/result/${runId}`);
+  if (!resp.ok) throw new Error(`Result fetch failed: ${resp.status}`);
+  return (await resp.json()) as RunResult;
+}
+
+export async function dockerExec(
+  container: string,
+  command: string,
+): Promise<string> {
+  const proc = Bun.spawn(["docker", "exec", container, "sh", "-c", command], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const stdout = await new Response(proc.stdout).text();
+  return stdout.trim();
+}
+
 // --- Planner invoke + poll ---
 
 export interface PlannerRunResult {

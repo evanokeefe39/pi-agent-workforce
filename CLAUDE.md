@@ -78,7 +78,7 @@ Planner :8081, Researcher :8082, Data :8083, Writer :8084, Publisher :8085, Code
 
 ## Cross-agent trace propagation
 
-All agents share one trace tree in OpenObserve. Sending side: subagent-http listens for `pi-otel:trace-active` event to get the current trace ID, constructs a W3C traceparent header manually (no @opentelemetry/api import needed), injects it on outgoing HTTP invoke calls. Receiving side: server.ts extracts parent context from the traceparent header via `propagation.extract()`, wraps `session.prompt()` in `context.with(parentCtx)` so pi-otel's `pi.interaction` span inherits the caller's trace ID.
+All agents share one trace tree in OpenObserve. Sending side: subagent-http listens for `pi-otel:trace-active` event, stores trace ID in a closure-scoped variable (per-session, concurrency-safe), constructs a W3C traceparent header, and passes it to invoke() on outgoing HTTP calls. Receiving side: server.ts extracts parent context from the traceparent header via `propagation.extract()`, wraps `session.prompt()` in `context.with(parentCtx)` so pi-otel's `pi.interaction` span inherits the caller's trace ID.
 
 `@opentelemetry/api` is installed separately in `/app/node_modules/` (server.ts) and `/root/.pi/agent/npm/node_modules/` (pi-otel). Two copies are safe because the package uses `Symbol.for('opentelemetry.js.api.1')` to share global state (TracerProvider, ContextManager, Propagator) across all copies in the same process. Do not attempt to deduplicate via symlinks or NODE_PATH — it's unnecessary and fragile.
 
@@ -87,24 +87,20 @@ Pi SDK tool dispatch breaks AsyncLocalStorage context propagation. Do not rely o
 ## Running tests
 
 ```bash
-# Bun/TypeScript tests (new — run with bun test)
-bun test tests/e2e/e2e-00-smoke.test.ts                # full pipeline smoke test (~3 min, 8 tests)
-bun test tests/e2e/e2e-30-instagram-growth-research.test.ts  # full planner pipeline (~12 min, 8 tests)
+# Bun/TypeScript tests (run with bun test)
+bun test tests/e2e/e2e-00-smoke.test.ts                       # full pipeline smoke test (~3 min, 8 tests)
+bun test tests/e2e/e2e-30-instagram-growth-research.test.ts   # full planner pipeline (~12 min, 8 tests)
+bun test tests/e2e/e2e-32-model-and-output-validation.test.ts # model + concurrency (11 tests)
+bun test tests/e2e/e2e-35-session-isolation.test.ts           # session dirs, replication (11 tests)
+bun test tests/e2e/e2e-56-qa-agent-pipeline.test.ts           # QA agent pipeline integration (6 tests)
 
 # Bash tests (legacy — migrating to Bun/TS)
-bash tests/e2e/e2e-32-model-and-output-validation.sh  # model + concurrency (11 tests)
-bash tests/e2e/e2e-35-session-isolation.sh             # session dirs, replication (11 tests)
 bash tests/e2e/e2e-34-data-agent-analysis.sh           # data agent workproduct tools
-bash tests/e2e/e2e-30-instagram-growth-research.sh     # full planner pipeline (legacy bash version)
-node tests/e2e/e2e-40-lineage-service.mjs --latest     # lineage API + graph (25 tests)
-node tests/e2e/artifact-lineage.mjs --latest           # ASCII lineage report
-node tests/e2e/artifact-lineage-html.mjs --latest      # HTML graph report
 bash tests/e2e/e2e-50-content-production-infra.sh      # shared skills, workspace, publisher, coder, routing (32 tests)
 bash tests/e2e/e2e-51-coder-rendering.sh               # coder toolchain, design system, live render, replication (15 tests)
 bash tests/e2e/e2e-52-content-production-pipeline.sh   # full Writer → Coder → Publisher chain via planner (10 tests)
 bash tests/e2e/e2e-53-writer-style-tools.sh            # writer style extension permissions + config (23 tests, static)
-bun test tests/e2e/e2e-55-qa-agent-infra.sh            # QA agent config checks (17 tests, static)
-bun test tests/e2e/e2e-56-qa-agent-pipeline.test.ts    # QA agent pipeline integration (6 tests)
+bash tests/e2e/e2e-55-qa-agent-infra.sh                # QA agent config checks (17 tests, static)
 ```
 
 ## Workproduct standard

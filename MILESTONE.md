@@ -63,23 +63,11 @@ Completed as part of M0.1 infrastructure work. Spec: `tasks/specs/artifact-store
 
 ---
 
-## M1.5: Artifact Lineage — Query Layer and UI — COMPLETE
+## M1.5: Artifact Lineage — Query Layer and UI — SUPERSEDED
 
-Track full dependency chains across agent-produced artifacts. Which agent created what, what inputs fed each output, how documents derive from source data. Lineage captured implicitly via read/write tracking in the artifact client — zero changes to agent prompts.
-
-Spec: `tasks/specs/artifact-lineage-service.md` | Plan: `tasks/plans/artifact-lineage-service.md`
-
-### Success criteria
-
-- [x] artifact_edges table stores derivation relationships between artifacts
-- [x] Lineage captured automatically when agents read then write artifacts (no agent prompt changes)
-- [x] GET /lineage/:id returns ancestor/descendant chain with configurable depth
-- [x] GET /lineage/graph?run_id=X returns full graph for a planner run (+ PROV-JSON format)
-- [x] React Flow UI renders lineage DAG with interactive node inspection (at /ui/)
-- [x] E2E-40: 25 tests covering all lineage endpoints, graph queries, PROV-JSON, trace
-- [x] Existing e2e tests (artifact-lineage.mjs, artifact-lineage-html.mjs) unbroken
-
-Completed 2026-06-09.
+Built lineage tracking (artifact_edges, graph endpoints, React Flow UI). Completed
+2026-06-09 then removed as part of R1 refactor — OTel traces replaced artifact-level
+lineage. All lineage code, endpoints, UI, and tests deleted.
 
 ---
 
@@ -216,40 +204,30 @@ Not started.
 
 ---
 
-## R1: Provenance and Artifact Architecture Refactor — PHASES 1-3 COMPLETE
+## R1: Provenance and Artifact Architecture Refactor — COMPLETE
 
-Replace tangled artifact/provenance system with industry-standard OpenLineage + Marquez.
-Separates event capture, blob storage, metadata, lineage, and discovery into independent
-layers. Introduces per-agent tool policies for workproduct enforcement.
+Replaced tangled artifact/provenance system. Introduced per-agent tool policies for
+workproduct enforcement. Old lineage system (graph.ts, lineage-ui, artifact_edges)
+removed. Marquez + OpenLineage provenance extension built and tested, then removed
+when OTel traces proved sufficient as sole observability system.
 
-Spec: `tasks/specs/provenance-and-artifact-architecture.md` | Plan: `tasks/plans/provenance-openlineage.md`
 Branch: `refactor/provenance-openlineage`
 
-### What shipped (Phases 1-3)
+### What shipped
 
-- Marquez API (:5000) + Web UI (:3001) in docker-compose
-- Provenance extension (`extensions/provenance/`) — tool_call/tool_result hooks, OpenLineage START/RUNNING/COMPLETE event emission to Marquez
 - Per-agent tool policies in all 7 agent.json configs (researcher/writer/data/qa/publisher block native write+edit, coder full access, planner delegates only)
 - Removed old lineage system: graph.ts, lineage-ui/, artifact_edges table, lineage endpoints, graphology deps, readLog tracking, provenance.jsonl (net -2533 lines)
+- Removed Marquez + provenance extension: extensions/provenance/ (3 files, 334 lines), Marquez services from docker-compose, marquez DB from init-artifact-db.sql
 - Restored .meta.json sidecar creation in write_artifact (replicator trigger mechanism)
-
-### Phases
-
-1. ~~Marquez + provenance extension~~ — COMPLETE
-2. ~~Per-agent tool policy enforcement~~ — COMPLETE
-3. ~~Remove old system (graph.ts, lineage-ui, artifact_edges, readLog)~~ — COMPLETE
-4. Extend (more tool classifications, column-level lineage, temporal queries) — NOT STARTED
+- Fixed activeTraceId concurrency bug in subagent-http (module-scoped → closure-scoped)
 
 ### Success criteria
 
-- [x] Provenance extension emits OpenLineage events on tool_call and tool_result hooks
 - [x] Tool policy enforcement blocks disallowed tools per agent config
-- [x] Policy enforcement works independently of Marquez availability
 - [x] Old lineage system fully removed (graph.ts, lineage-ui, artifact_edges, readLog)
+- [x] Marquez + provenance extension fully removed
 - [x] Artifact replication preserved (write_artifact creates .meta.json sidecars for replicator)
 - [x] All agent.json configs have toolPolicy defined
-- [ ] Phase 4: Extended tool classifications beyond READ/WRITE
-- [ ] Phase 4: Column-level lineage tracking
-- [ ] Phase 4: Temporal lineage queries via Marquez API
+- [x] OTel traces sole observability system — cross-agent trace propagation working
 
-Phases 1-3 completed 2026-06-11.
+Completed 2026-06-13.

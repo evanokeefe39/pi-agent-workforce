@@ -1,22 +1,8 @@
 import type { InvokeRequest, InvokeResponse, StatusResponse, ResultResponse, DescribeResponse } from "./types.ts";
-import { randomBytes } from "node:crypto";
 
-let activeTraceId: string | null = null;
-
-export function setActiveTraceId(traceId: string) {
-  activeTraceId = traceId;
-}
-
-function makeTraceparent(): string | null {
-  if (!activeTraceId) return null;
-  const spanId = randomBytes(8).toString("hex");
-  return `00-${activeTraceId}-${spanId}-01`;
-}
-
-export async function invoke(baseUrl: string, request: InvokeRequest): Promise<InvokeResponse> {
+export async function invoke(baseUrl: string, request: InvokeRequest, traceparent?: string | null): Promise<InvokeResponse> {
   const url = `${baseUrl.replace(/\/+$/, "")}/invoke`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const traceparent = makeTraceparent();
   if (traceparent) headers["traceparent"] = traceparent;
   const res = await fetch(url, {
     method: "POST",
