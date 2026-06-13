@@ -9,7 +9,7 @@ RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/lo
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --production
-COPY server.ts logger.mjs jidoka.ts artifact-store.ts ./
+COPY server.ts logger.mjs jidoka.ts ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/deep-research/ /root/.pi/agent/extensions/deep-research/
 COPY extensions/duckdb/ /root/.pi/agent/extensions/duckdb/
@@ -44,7 +44,7 @@ RUN curl -fsSL https://bun.sh/install | bash && ln -s /root/.bun/bin/bun /usr/lo
 WORKDIR /app
 COPY package.json bun.lock* ./
 RUN bun install --production
-COPY server.ts logger.mjs jidoka.ts artifact-store.ts ./
+COPY server.ts logger.mjs jidoka.ts ./
 COPY extensions/artifacts/ /root/.pi/agent/extensions/artifacts/
 COPY extensions/subagent-http/ /root/.pi/agent/extensions/subagent-http/
 COPY extensions/tool-policy/ /root/.pi/agent/extensions/tool-policy/
@@ -61,13 +61,6 @@ EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=5s --start-period=120s --retries=3 \
   CMD bun -e "fetch('http://localhost:8080/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 CMD ["bun", "run", "server.ts"]
-
-# ============================================================
-# LIGHTWEIGHT AGENTS — ceo, coder, qa, publisher
-# ============================================================
-FROM base AS ceo
-COPY ceo/.pi/agent/ /root/.pi/agent/
-COPY ceo/agent.json /app/ceo/agent.json
 
 # ============================================================
 # CODER — rendering toolchain (Chromium + React + Playwright)
