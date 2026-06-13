@@ -255,6 +255,15 @@
 
 ---
 
+## pollUntilDone must recognize all terminal states — not just completed/failed
+
+**Date:** 2026-06-13
+**Trigger:** Smoke test planner stuck at turn 4 for 10+ minutes. Root cause: researcher hit maxTurns (60), server.ts set state to "cancelled". pollUntilDone in poll.ts only checked for "completed" or "failed" as terminal states, so it kept polling the "cancelled" run until its own 10-minute timeout.
+**Rule:** Any state machine consumer must handle ALL terminal states, not just the happy-path ones. server.ts can produce four terminal states: completed, failed, cancelled, timeout. Poll code that only checks two will silently hang on the other two.
+**How to apply:** When adding new terminal states to server.ts (or any state machine), grep all consumers of that state for exhaustive matching. poll.ts, formatResult, and any test assertions that check state must all handle every possible terminal value.
+
+---
+
 ## Subagent artifacts have their own run_id — use `since` for pipeline-scoped queries
 
 **Date:** 2026-06-10
