@@ -64,11 +64,9 @@ Config: agents point `PI_PROVIDER_URL` at `http://litellm:4000` instead of direc
 
 ## Priority Assessment
 
-**Component 1 (validation extension) is higher priority** — directly addresses the malformed tool-call failures.
+**Component 1 (validation extension) is the deliverable** — directly addresses the malformed tool-call failures.
 
-**Component 2 (LiteLLM sidecar) is lower priority** — the Pi SDK already has retry.maxRetries: 5 with fallbackChains in config.yml. LiteLLM would add smarter retry (instant failover to healthy deployments, per-exception policies) but the existing config already covers the basic case.
-
-**Recommendation:** Build Component 1 first. Defer Component 2 until transport errors are observed as a significant failure source.
+**Component 2 (LiteLLM sidecar) is not needed.** Pi SDK already has retry.maxRetries: 5 with fallbackChains in config.yml covering 429/502/503 retries and multi-provider failover. This was confirmed 2026-06-13 — transport errors are handled by existing config.
 
 ## Open Questions
 

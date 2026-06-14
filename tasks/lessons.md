@@ -186,7 +186,7 @@
 
 **Date:** 2026-06-09
 **Trigger:** Replicator upload failed with Postgres CHECK constraint violation — planner wrote a manifest file with an artifact_type not in the allowed list. Initial fix put type normalization in replicator.ts, which was wrong — replicator is a dumb pipe. Adding type knowledge to the replicator couples it to every agent's domain vocabulary.
-**Rule:** Type normalization happens at two boundaries: (1) the source — workproduct extensions in each agent that standardize types before writing .meta.json sidecars, (2) the destination — artifact service routes.ts that normalizes on ingest as a safety net. The replicator passes artifact_type through untouched. If a new agent invents a new type, you update the workproduct extension for that agent and the artifact service constraint — never the replicator.
+**Rule:** Type normalization happens at two boundaries: (1) the source — workproduct extensions in each agent that standardize types before calling publish_artifact, (2) the destination — artifact service routes.ts that normalizes on ingest as a safety net. If a new agent invents a new type, update the workproduct extension for that agent and the artifact service constraint. (Note: replicator was removed — publish_artifact replaced the sidecar → replicator → upload chain.)
 
 ## Dynamic imports in server.ts must resolve from /app/ — pi extension packages are invisible
 
@@ -201,7 +201,6 @@
 **Trigger:** Added `await import("@opentelemetry/api")` to server.ts for manual trace propagation. Import silently failed because @opentelemetry/api only existed in `/root/.pi/agent/npm/node_modules/` (pi-otel's dependency tree), not in `/app/node_modules/` where server.ts resolves modules. The try/catch swallowed the error, `otelApi` stayed null, all tracing code was silently no-op. No error in logs.
 **Rule:** When server.ts (or any `/app/` code) needs to import a package, it must be in `src/agents/package.json` — even if the same package exists elsewhere in the container (pi extensions, npm packages). Bun resolves from the importing file's location. Pi extensions live in `/root/.pi/agent/npm/node_modules/` which is NOT on the resolution path for `/app/server.ts`. The @opentelemetry/api package uses `Symbol.for()` for process-global singleton state, so having two copies (one in /app/, one in pi-otel's tree) is safe — they share the same TracerProvider.
 **How to apply:** Before using `import("some-package")` in server.ts, verify it's in `src/agents/package.json`. Run `bun install` to update the lockfile. Test with `docker exec <container> sh -c "bun -e \"require('some-package')\""` from /app/ context to verify resolution.
-**How to apply:** When adding new artifact types: add to Postgres CHECK constraint, add to artifact service VALID_ARTIFACT_TYPES set, add normalization to the producing agent's workproduct extension. Replicator stays unchanged.
 
 ## Extensions must not couple to other extensions
 

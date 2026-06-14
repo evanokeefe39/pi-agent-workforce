@@ -19,6 +19,7 @@ docker-compose.override.yml
 Thumbs.db
 Desktop.ini
 .DS_Store
+*.stackdump
 
 # Editors / IDEs
 .vscode/
@@ -32,6 +33,10 @@ tests/results/
 
 # Artifacts (local bind-mount)
 /artifacts
+
+# User data (local docs/data, not source-controlled)
+user_data/*
+!user_data/.gitkeep
 
 # Claude Code worktrees
 .claude/worktrees/

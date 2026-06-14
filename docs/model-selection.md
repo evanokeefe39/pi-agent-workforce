@@ -221,8 +221,8 @@ all files must be updated together.
 
 | File | What it controls | Format |
 |------|-----------------|--------|
-| `settings.json` defaultProvider/defaultModel | Pi CLI runtime model selection + server metadata | `"deepseek"` / `"deepseek-v4-pro"` |
-| `config.yml` modelRoles | Role-based routing (default, agentic, plan, smol) | `deepseek/deepseek-v4-pro` |
+| `settings.json` defaultProvider/defaultModel | Pi CLI runtime model selection + server metadata | `"deepseek"` / `"deepseek-v4-flash"` |
+| `config.yml` modelRoles | Role-based routing (default, agentic, plan, smol) | `deepseek/deepseek-v4-flash` |
 | `config.yml` fallbackChains | Ordered fallback when primary fails | Array of `provider/model` |
 | `models.json` providers | API endpoints, auth, available model IDs | Provider objects with model arrays |
 
@@ -245,8 +245,8 @@ All config files live at `src/agents/{name}/.pi/agent/`:
 7. Restart: `docker compose up -d`
 8. Verify: `curl localhost:808{1,2,3,4}/describe | jq .model`
 
-Note: server.mjs reads model identity from settings.json at boot. No separate
-env var or server.mjs edit needed. PI_PROVIDER/PI_MODEL env vars are accepted
+Note: server.ts reads model identity from settings.json at boot. No separate
+env var or server.ts edit needed. PI_PROVIDER/PI_MODEL env vars are accepted
 as optional overrides but should not be set in docker-compose.
 
 ### How to verify what model is running

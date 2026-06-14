@@ -70,18 +70,14 @@ Why 5: The retry logic assumes the error message is the ONLY assistant message a
 
 ---
 
-## OPEN: No resilience layer for malformed or non-200 LLM responses
+## OPEN: Tool call validation extension — catch malformed JSON before execution
 
-**Status:** Open — monitor frequency before investing
+**Status:** Open — spec complete at `tasks/specs/llm-proxy.md`
 **Severity:** Medium
 
-**Problem:** When LLM providers return non-200 responses (429, 502, 503) or malformed output (truncated JSON, text instead of tool calls), the only handling is inside the Pi SDK's retry logic — which itself has bugs (see planner SDK crash issue above). No intermediate layer normalizes responses before they reach the agent loop.
+**Problem:** DeepSeek V4 Flash occasionally produces malformed JSON in tool call arguments. Pi SDK passes these through unchecked, causing tool execution failures or silent misbehavior.
 
-**Impact:** Transient provider errors propagate into SDK state corruption. Each new failure mode requires a new server.ts workaround.
-
-**Potential fix:** LLM API proxy between agents and providers — retries transient errors, normalizes responses, handles rate-limit backoff. All agents benefit from one layer. Also where you'd catch malformed JSON, truncated responses, parallel tool calling mismatches across models.
-
-**Decision:** Monitor. If SDK crash or similar failures recur across multiple E2E runs, build the proxy. Current server-level retry is sufficient mitigation for now.
+**Decision:** Pi SDK already handles transport retries (config.yml `retry.maxRetries: 5` + fallback chains). A full LiteLLM proxy sidecar is not needed. The remaining gap is a lightweight tool-validation extension that catches malformed JSON, attempts deterministic repair, and feeds errors back to the model via the validate-and-reask pattern. See `tasks/specs/llm-proxy.md` for full research and architecture.
 
 ---
 
@@ -146,12 +142,12 @@ Why 5: The retry logic assumes the error message is the ONLY assistant message a
 **Status:** Partially resolved
 **Severity:** High
 
-**What changed:** server.mjs now reads from settings.json at boot. PI_MODEL/PI_PROVIDER removed from docker-compose.yml. Down from 4 sources of truth to 2.
+**What changed:** server.ts now reads from settings.json at boot. PI_MODEL/PI_PROVIDER removed from docker-compose.yml. Down from 4 sources of truth to 2.
 
 **Remaining sources:**
 | Source | What it controls |
 |--------|-----------------|
-| `settings.json` defaultProvider/defaultModel | Pi CLI runtime model selection + server.mjs reporting |
+| `settings.json` defaultProvider/defaultModel | Pi CLI runtime model selection + server.ts reporting |
 | `config.yml` modelRoles | Role-based model routing, fallback chains |
 
 **Remaining work:** config.yml and settings.json still require manual alignment. When the default model changes, both files in every agent must be updated. A single source of truth (one file generates or validates the other) has not been implemented.
@@ -303,6 +299,27 @@ added 2 packages, and audited 97 packages in 3s
 
 ---
 
+## OPEN: Clean up src/agents directory structure
+
+**Status:** Not started
+**Severity:** Low — cosmetic, no functional impact
+
+**Problem:** `src/agents/` mixes shared server code, per-agent configs, agent-specific deps, SDK extensions, and dead directories at the same level. Naming is inconsistent.
+
+**Current structure issues:**
+- `*-deps/` folders (researcher-deps, data-deps, coder-deps) each contain only a package.json for Docker multi-stage builds. Could live inside each agent's directory.
+- `pi-npm/` name is opaque — contains Pi SDK runtime extensions (pi-otel, pi-tasks). Should be `sdk-extensions/` or similar.
+- Shared server files (server.ts, jidoka.ts, logger.mjs) sit at the root alongside agent directories — no `base/` or `shared/` grouping.
+
+**Proposed cleanup:**
+1. Move `*-deps/package.json` into each agent dir (e.g. `researcher/deps.json`) — update Dockerfile COPY paths
+2. Rename `pi-npm/` → `sdk-extensions/` — update Dockerfile COPY paths
+3. Consider `shared/` directory for server.ts, jidoka.ts, logger.mjs — evaluate Dockerfile impact
+
+**Constraint:** Dockerfile multi-stage builds depend on current paths. Each change requires updating COPY lines and rebuilding.
+
+---
+
 ## OPEN: Agent-to-user escalation over HTTP — AskUserQuestion equivalent
 
 **Status:** Not started
@@ -337,11 +354,8 @@ added 2 packages, and audited 97 packages in 3s
 - server.ts creates `/workspace/sessions/{traceId}/` per invocation with `output/`, `workproduct/`, `scratch/` subdirs
 - server.ts calls `createAgentSession` (not `createAgentSessionFromServices`) with `cwd: sessionDir` — all Pi SDK tools (bash, read, write) operate in session dir
 - `jidoka.ts` — pure validation functions extracted from server.ts
-- `replicator.ts` — fs.watch on `/workspace/sessions/` for `.meta.json` files, uploads paired artifact via ArtifactStore interface
-- `artifact-store.ts` — ArtifactStore interface + HttpArtifactStore calling artifact service REST API
-- Extensions (`write_artifact`, `record_query_result`, etc.) write `.meta.json` sidecars + append to `provenance.jsonl`
-- Agent-complete gate: waits for all sidecars to replicate before marking run done
-- E2E-35: 11 tests covering session dirs, concurrent isolation, replication, sidecar writes, dir structure
+- Extensions (`publish_artifact`, `record_query_result`, etc.) upload directly to artifact service via HTTP
+- E2E-35: 11 tests covering session dirs, concurrent isolation, dir structure
 
 **Key finding:** Spec's "Resolved Question 1" was wrong — `createAgentSessionFromServices` hardcodes `services.cwd`, so `SessionManager.inMemory(sessionDir)` alone doesn't propagate cwd to tools. Fix: call `createAgentSession` directly with `cwd: sessionDir`.
 
@@ -357,9 +371,7 @@ added 2 packages, and audited 97 packages in 3s
 - Replicator stays a dumb pipe — no type knowledge, passes artifact_type through untouched.
 
 **Remaining work:**
-- Session directory cleanup (TTL-based, post-replication)
-- Docker-compose sysctls for inotify limits (`fs.inotify.max_user_watches`, `fs.inotify.max_user_instances`)
-- Verify replication under high file volume (current testing: 2-5 files per session)
+- Session directory cleanup (TTL-based, after run completes)
 
 ---
 
