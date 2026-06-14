@@ -177,11 +177,15 @@ docs/                    # Model selection, research
 
 | Doc | Purpose |
 |-----|---------|
-| [CLAUDE.md](CLAUDE.md) | Development reference — architecture, key files, gotchas |
+| [Getting Started](docs/getting-started.md) | Setup, first task, troubleshooting |
+| [Architecture](docs/architecture.md) | System design, delegation, session isolation, artifact flow |
+| [API Reference](docs/api-reference.md) | HTTP endpoints, request/response formats, concurrency |
+| [Agents](docs/agents.md) | Each agent's role, tools, extensions, and capabilities |
+| [Model Selection](docs/model-selection.md) | Model decisions, provider catalog, fallback chains, cost |
+| [CLAUDE.md](CLAUDE.md) | Development quick-reference — key files, gotchas |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Git workflow, branch conventions, PR process |
 | [ISSUES.md](ISSUES.md) | Known issues, partial fixes, resolved issues |
 | [MILESTONE.md](MILESTONE.md) | Project history and milestone tracking |
-| [docs/model-selection.md](docs/model-selection.md) | Model decisions, provider catalog, cost analysis |
 
 ## Background
 
