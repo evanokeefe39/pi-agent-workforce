@@ -17,7 +17,7 @@ COPY extensions/web-fetch.ts /root/.pi/agent/extensions/web-fetch.ts
 COPY extensions/web-scrape/ /root/.pi/agent/extensions/web-scrape/
 COPY extensions/web-search.ts /root/.pi/agent/extensions/web-search.ts
 COPY extensions/tool-policy/ /root/.pi/agent/extensions/tool-policy/
-COPY extensions/workproduct-lib/ /root/.pi/agent/extensions/workproduct-lib/
+COPY extensions/workproduct/ /root/.pi/agent/extensions/workproduct/
 COPY extensions/writing-style/ /root/.pi/agent/extensions/writing-style/
 COPY extensions/context-compaction/ /root/.pi/agent/extensions/context-compaction/
 RUN pi extensions install || true

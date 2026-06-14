@@ -20,7 +20,7 @@ The planner has access to the artifact service for reading results but not to re
 Web research specialist. Searches the web, scrapes pages, and produces structured findings graded with ADMIRALTY reliability/credibility scores (A-F reliability, 1-6 credibility).
 
 **Key tools:** `web_search`, `web_fetch`, `scrape_apify`, `deep_research`, `record_finding`, `publish_artifact`
-**Extensions:** artifacts, deep-research, web-scrape, workproduct-lib, context-compaction
+**Extensions:** artifacts, deep-research, web-scrape, workproduct, context-compaction
 **Required tools:** `record_finding`, `publish_artifact`
 
 Output: JSONL dataset of structured findings, each with ADMIRALTY grades and source attribution.
@@ -34,7 +34,7 @@ Output: JSONL dataset of structured findings, each with ADMIRALTY grades and sou
 Data analysis specialist. Scrapes structured data, runs SQL analytics via DuckDB, and produces metrics, charts, and dataset references.
 
 **Key tools:** `web_search`, `web_fetch`, `scrape_apify`, `record_query_result`, `record_metric`, `record_chart`, `record_dataset_ref`, `publish_artifact`
-**Extensions:** artifacts, duckdb, web-scrape, workproduct-lib, context-compaction
+**Extensions:** artifacts, duckdb, web-scrape, workproduct, context-compaction
 **System deps:** Python 3, Scrapling, Playwright (Chromium), ffmpeg, DuckDB
 
 ---
@@ -46,7 +46,7 @@ Data analysis specialist. Scrapes structured data, runs SQL analytics via DuckDB
 Document generation specialist. Consumes research findings, produces long-form documents with proper hedging based on ADMIRALTY grades. Uses a section fanout pattern — plans sections, writes each via subagent, then assembles.
 
 **Key tools:** `read_artifact`, `publish_artifact`, `validate_style`, `fix_violations`, `vale_lint`
-**Extensions:** artifacts, writing-style, workproduct-lib, context-compaction
+**Extensions:** artifacts, writing-style, workproduct, context-compaction
 **System deps:** Vale linter
 
 ---
