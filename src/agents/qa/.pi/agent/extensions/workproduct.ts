@@ -183,6 +183,10 @@ const exportEvaluationsJsonlTool: ExtraToolDef = {
 
 // ---------------------------------------------------------------------------
 // Extension
+// Generated tools: record_artifact_review, record_plan_review,
+//   record_stage_gate, record_violation, record_commendation,
+//   query_assessments, get_assessment, list_evaluations,
+//   export_evaluations_jsonl
 // ---------------------------------------------------------------------------
 
 export default function (pi: ExtensionAPI) {
