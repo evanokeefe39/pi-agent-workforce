@@ -71,6 +71,8 @@ COPY coder-deps/package.json /app/coder-deps/package.json
 RUN cd /app/coder-deps && npm install
 
 FROM coder-deps AS coder
+ENV NODE_PATH=/app/coder-deps/node_modules
+ENV PATH="/app/coder-deps/node_modules/.bin:${PATH}"
 COPY coder/.pi/agent/ /root/.pi/agent/
 COPY coder/agent.json /app/coder/agent.json
 COPY skills/brand-guidelines/ /root/.pi/agent/skills/brand-guidelines/
