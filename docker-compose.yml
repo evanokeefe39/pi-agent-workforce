@@ -158,6 +158,7 @@ services:
       BRIDGE_TIMEOUT_MS: "1800000"
       MAX_CONCURRENT_SESSIONS: "1"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OPENAI_COMPAT_ENABLED: "true"
     depends_on:
       artifact-service:
         condition: service_healthy
@@ -187,6 +188,7 @@ services:
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "3"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OPENAI_COMPAT_ENABLED: "true"
     volumes:
       - researcher-workspace:/workspace
     depends_on:
@@ -241,6 +243,7 @@ services:
       BRIDGE_TIMEOUT_MS: "600000"
       MAX_CONCURRENT_SESSIONS: "2"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      OPENAI_COMPAT_ENABLED: "true"
     deploy:
       resources:
         limits:

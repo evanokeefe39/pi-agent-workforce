@@ -14,6 +14,15 @@ import {
   checkMidRunTools,
   checkMaxTurns,
 } from "./jidoka.js";
+import { createSession, createChannel } from "better-sse";
+
+const sseChannel = createChannel();
+
+type RunEventType = "accepted" | "progress" | "completed" | "failed" | "cancelled";
+
+function emitRunEvent(type: RunEventType, runId: string, data: Record<string, any>) {
+  try { sseChannel.broadcast({ runId, ...data }, `run:${type}`); } catch {}
+}
 
 // --- Configuration ---
 
@@ -33,6 +42,8 @@ const SESSIONS_ROOT = "/workspace/sessions";
 const CWD = "/workspace/scratch";
 const MAX_PROMPT_RETRIES = parseInt(process.env.MAX_PROMPT_RETRIES || "2", 10);
 const SDK_MESSAGE_ROLE_ERROR = /Cannot continue from message role/;
+const OPENAI_COMPAT_ENABLED = process.env.OPENAI_COMPAT_ENABLED === "true";
+const OPENAI_COMPAT_API_KEY = process.env.OPENAI_COMPAT_API_KEY || "";
 
 async function shutdownSession(session: any) {
   try {
@@ -142,6 +153,10 @@ const activeAborts = new Map<string, AbortController>();
 
 function trackRun(runId: string, data: Record<string, any>) {
   runs.set(runId, { ...runs.get(runId), ...data });
+  if (data.status === "queued") emitRunEvent("accepted", runId, { state: "queued", agent: AGENT_NAME });
+  if (data.status === "completed") emitRunEvent("completed", runId, { state: "completed", output: data.output || "", usage: data.usage, durationMs: data.completedAt ? Date.parse(data.completedAt) - (runs.get(runId)?.startedAtMs || Date.now()) : 0 });
+  if (data.status === "failed" || data.status === "timeout") emitRunEvent("failed", runId, { state: "failed", error: data.error });
+  if (data.status === "cancelled") emitRunEvent("cancelled", runId, { state: "cancelled" });
   while (runs.size > MAX_RUN_HISTORY) {
     const oldest = runs.keys().next().value;
     if (oldest) runs.delete(oldest);
@@ -293,6 +308,7 @@ async function processInvocation(body: any, requestId: string, requestStart: num
       });
       const turnCount = usageByTurn.length;
       trackRun(requestId, { turnCount });
+      emitRunEvent("progress", requestId, { state: "running", turnCount });
 
       const maxCheck = checkMaxTurns(validationConfig, turnCount);
       if (!maxCheck.pass) {
@@ -586,6 +602,143 @@ app.get("/runs/:runId", async (req, reply) => {
   const run = runs.get(req.params.runId);
   if (!run) return reply.code(404).send({ error: "not_found" });
   return { runId: req.params.runId, ...run };
+});
+
+app.get("/events", async (req, reply) => {
+  const session = await createSession(req.raw, reply.raw);
+  reply.raw.setHeader("X-Accel-Buffering", "no");
+  sseChannel.register(session);
+
+  const heartbeat = setInterval(() => {
+    try { session.push({ ts: Date.now(), activeRuns: activeCount }, "heartbeat"); }
+    catch { clearInterval(heartbeat); }
+  }, 15_000);
+
+  req.raw.on("close", () => clearInterval(heartbeat));
+});
+
+app.get("/v1/models", async () => {
+  if (!OPENAI_COMPAT_ENABLED) return { object: "list", data: [] };
+  return {
+    object: "list",
+    data: [{
+      id: `pi/${AGENT_NAME}`,
+      object: "model",
+      created: Math.floor(bootTime / 1000),
+      owned_by: "pi-agent-workforce",
+    }],
+  };
+});
+
+app.post("/v1/chat/completions", async (req, reply) => {
+  if (!OPENAI_COMPAT_ENABLED) return reply.code(404).send({ error: "not_found" });
+
+  if (OPENAI_COMPAT_API_KEY) {
+    const auth = (req.headers as any).authorization;
+    if (!auth || auth !== `Bearer ${OPENAI_COMPAT_API_KEY}`) {
+      return reply.code(401).send({ error: { message: "unauthorized", type: "auth_error" } });
+    }
+  }
+
+  if (!services) return reply.code(503).send({ error: "starting" });
+
+  const body = req.body as any;
+  const messages = body.messages || [];
+  const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+  if (!lastUserMsg) {
+    return reply.code(400).send({ error: { message: "no user message", type: "invalid_request_error" } });
+  }
+
+  if (activeCount >= MAX_CONCURRENT && waitQueue.length >= QUEUE_MAX_DEPTH) {
+    return reply.code(429).send({ error: { message: "queue full", type: "rate_limit_error" } });
+  }
+
+  const systemMsgs = messages.filter((m: any) => m.role === "system").map((m: any) => m.content);
+  const context = systemMsgs.length > 0 ? systemMsgs.join("\n\n") : undefined;
+  const task = typeof lastUserMsg.content === "string" ? lastUserMsg.content : JSON.stringify(lastUserMsg.content);
+
+  const requestId = randomUUID().replace(/-/g, "");
+  const completionId = `chatcmpl-${requestId}`;
+  const modelId = `pi/${AGENT_NAME}`;
+  const created = Math.floor(Date.now() / 1000);
+  const requestStart = Date.now();
+
+  metrics.requests_total++;
+  metrics.requests_active++;
+  metrics.last_request_at = new Date().toISOString();
+
+  reply.raw.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+
+  const sendChunk = (content: string | null, finishReason: string | null = null) => {
+    const chunk = {
+      id: completionId, object: "chat.completion.chunk", created, model: modelId,
+      choices: [{ index: 0, delta: content !== null ? { content } : {}, finish_reason: finishReason }],
+    };
+    reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+  };
+
+  // Initial role chunk
+  reply.raw.write(`data: ${JSON.stringify({
+    id: completionId, object: "chat.completion.chunk", created, model: modelId,
+    choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }],
+  })}\n\n`);
+
+  const heartbeat = setInterval(() => { reply.raw.write(`: heartbeat\n\n`); }, 15_000);
+  const statusTimer = setInterval(() => {
+    const elapsed = Math.round((Date.now() - requestStart) / 1000);
+    sendChunk(`[Working... ${elapsed}s elapsed]\n`);
+  }, 30_000);
+
+  const abortController = new AbortController();
+  activeAborts.set(requestId, abortController);
+  trackRun(requestId, {
+    status: "queued", startedAt: new Date().toISOString(), startedAtMs: Date.now(),
+    correlationId: requestId, output: null, error: null, usage: null, turnCount: 0,
+  });
+
+  log("info", "openai_request", { request_id: requestId, task_length: task.length });
+
+  try {
+    await acquireSlot();
+    await processInvocation({ task, context, correlationId: requestId }, requestId, requestStart, abortController);
+  } catch (err: any) {
+    clearInterval(heartbeat);
+    clearInterval(statusTimer);
+    sendChunk(`\n\n[Error: ${err.message}]`);
+    sendChunk(null, "stop");
+    reply.raw.write(`data: [DONE]\n\n`);
+    reply.raw.end();
+    return;
+  }
+
+  clearInterval(heartbeat);
+  clearInterval(statusTimer);
+
+  const run = runs.get(requestId);
+  if (run?.status === "completed" && run.output) {
+    sendChunk(run.output);
+  } else {
+    sendChunk(`\n\n[Agent ${run?.status || "unknown"}: ${run?.error || "no output"}]`);
+  }
+
+  sendChunk(null, "stop");
+
+  if (body.stream_options?.include_usage) {
+    const u = run?.usage || {};
+    reply.raw.write(`data: ${JSON.stringify({
+      id: completionId, object: "chat.completion.chunk", created, model: modelId,
+      choices: [],
+      usage: { prompt_tokens: u.inputTokens || 0, completion_tokens: u.outputTokens || 0, total_tokens: (u.inputTokens || 0) + (u.outputTokens || 0) },
+    })}\n\n`);
+  }
+
+  reply.raw.write(`data: [DONE]\n\n`);
+  reply.raw.end();
 });
 
 app.post("/invoke", async (req, reply) => {
