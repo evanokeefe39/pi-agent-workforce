@@ -181,6 +181,7 @@ docs/                    # Model selection, research
 | [Architecture](docs/architecture.md) | System design, delegation, session isolation, artifact flow |
 | [API Reference](docs/api-reference.md) | HTTP endpoints, request/response formats, concurrency |
 | [Agents](docs/agents.md) | Each agent's role, tools, extensions, and capabilities |
+| [Toyota Way Principles](docs/toyota-way-principles.md) | TPS principles applied to multi-agent systems |
 | [Model Selection](docs/model-selection.md) | Model decisions, provider catalog, fallback chains, cost |
 | [CLAUDE.md](CLAUDE.md) | Development quick-reference — key files, gotchas |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Git workflow, branch conventions, PR process |
