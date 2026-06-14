@@ -166,7 +166,7 @@ Pi extensions add tools and capabilities to agents. Shared extensions live at `s
 | `subagent-http` | HTTP delegation to other agents (planner only) |
 | `tool-policy` | RBAC enforcement from rbac.json |
 | `web-scrape` | Web scraping with Apify integration |
-| `workproduct-lib` | `record_finding`, `record_metric`, `record_chart` tools |
+| `workproduct` | `record_finding`, `record_metric`, `record_chart` tools (factory-generated) |
 | `writing-style` | Vale linter integration, style validation |
 
 Extensions are configured per-agent in the Dockerfile — the planner gets `subagent-http` but not research tools, enforcing delegation over direct action.

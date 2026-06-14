@@ -4,7 +4,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as client from "./client.js";
 
-const TEMPLATES_ROOT = "/root/.pi/agent/extensions/workproduct-lib/templates";
+const TEMPLATES_ROOT = "/root/.pi/agent/extensions/workproduct/templates";
 
 function parseId(input: string): string {
   if (input.startsWith("artifact://")) {
