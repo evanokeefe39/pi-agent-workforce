@@ -216,8 +216,8 @@ const addSourceTool: ExtraToolDef = {
     finding_id: Type.String({ description: "ULID of the existing finding" }),
     source: SourceSchema,
   }),
-  async execute(handle: WorkproductHandle, _toolCallId, params) {
-    const rec = handle.read(params.finding_id);
+  async execute(handle: WorkproductHandle, _toolCallId, params, _signal, _onUpdate, ctx) {
+    const rec = handle.read(params.finding_id, ctx);
     if (!rec) {
       return { content: [{ type: "text" as const, text: `Error: finding ${params.finding_id} not found` }] };
     }
@@ -249,7 +249,7 @@ const addSourceTool: ExtraToolDef = {
       ...m,
       sources: updatedSources,
       corroboration,
-    });
+    }, ctx);
 
     const grade = admiraltyGrade(updatedSources, primaryIdx);
     const parts = [
@@ -320,40 +320,42 @@ export default function (pi: ExtensionAPI) {
           }
           return null;
         },
-        beforeWrite: (p) => {
-          const sources: SourceInput[] = p.sources;
+        metadata: (p, sid) => {
           const primaryIdx = p.primary_source_index ?? 0;
-          const corroboration = inferCorroboration(sources, p.corroboration);
-          const grade = admiraltyGrade(sources, primaryIdx);
-          return { ...p, _corroboration: corroboration, _grade: grade, _primaryIdx: primaryIdx };
+          return {
+            style: p.style,
+            sources: p.sources,
+            primary_source_index: primaryIdx,
+            corroboration: inferCorroboration(p.sources, p.corroboration),
+            admiralty_grade: admiraltyGrade(p.sources, primaryIdx),
+            date_information: p.date_information || undefined,
+            topic_tags: p.topic_tags || [],
+            entities: p.entities || [],
+            related_findings: p.related_findings || [],
+            contradicts: p.contradicts || [],
+            claim_preview: p.claim.slice(0, 120),
+            session_id: sid,
+          };
         },
-        metadata: (p, sid) => ({
-          style: p.style,
-          sources: p.sources,
-          primary_source_index: p._primaryIdx ?? p.primary_source_index ?? 0,
-          corroboration: p._corroboration,
-          admiralty_grade: p._grade,
-          date_information: p.date_information || undefined,
-          topic_tags: p.topic_tags || [],
-          entities: p.entities || [],
-          related_findings: p.related_findings || [],
-          contradicts: p.contradicts || [],
-          claim_preview: p.claim.slice(0, 120),
-          session_id: sid,
-        }),
         summary: (id, p) => {
+          const primaryIdx = p.primary_source_index ?? 0;
+          const corroboration = inferCorroboration(p.sources, p.corroboration);
+          const grade = admiraltyGrade(p.sources, primaryIdx);
           const parts = [`Finding recorded: ${id}`];
-          if (p._grade) parts.push(`ADMIRALTY grade: ${p._grade}`);
-          parts.push(`Corroboration: ${p._corroboration}`);
+          if (grade) parts.push(`ADMIRALTY grade: ${grade}`);
+          parts.push(`Corroboration: ${corroboration}`);
           parts.push(`Sources: ${p.sources.length}`);
           return parts.join("\n");
         },
-        details: (id, p) => ({
-          id,
-          admiralty_grade: p._grade,
-          corroboration: p._corroboration,
-          source_count: p.sources.length,
-        }),
+        details: (id, p) => {
+          const primaryIdx = p.primary_source_index ?? 0;
+          return {
+            id,
+            admiralty_grade: admiraltyGrade(p.sources, primaryIdx),
+            corroboration: inferCorroboration(p.sources, p.corroboration),
+            source_count: p.sources.length,
+          };
+        },
       },
     },
     profiles: FINDING_PROFILES,

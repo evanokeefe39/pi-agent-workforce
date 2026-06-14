@@ -157,26 +157,21 @@ export function createWorkproductExtension(
             return asText(`Validation failed:\n${errors.join("\n")}`);
           }
 
-          let finalParams = params;
-          if (kind.beforeWrite) {
-            finalParams = kind.beforeWrite(params);
-          }
-
           const sessionId = getSessionId(ctx);
           const result = writeRecord(
             getBasedir(ctx), kind.subdir, kindName,
-            kind.filename(finalParams),
-            kind.content(finalParams),
-            kind.metadata(finalParams, sessionId),
+            kind.filename(params),
+            kind.content(params),
+            kind.metadata(params, sessionId),
           );
 
-          let text = kind.summary(result.id, finalParams);
+          let text = kind.summary(result.id, params);
           if (warnings.length > 0) {
             text += `\nWarnings:\n${warnings.join("\n")}`;
           }
 
           const details = kind.details
-            ? { ...kind.details(result.id, finalParams), warnings }
+            ? { ...kind.details(result.id, params), warnings }
             : { id: result.id, warnings };
 
           return asText(text, details);

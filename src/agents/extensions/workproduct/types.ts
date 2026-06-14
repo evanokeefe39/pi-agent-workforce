@@ -35,7 +35,6 @@ export interface KindDef {
   metadata: (params: Record<string, any>, sessionId: string) => Record<string, unknown>;
   summary: (id: string, params: Record<string, any>) => string;
   promptSnippet?: string;
-  beforeWrite?: (params: Record<string, any>) => Record<string, any>;
   validate?: (params: Record<string, any>) => { errors: string[]; warnings: string[] } | null;
   sources?: (params: Record<string, any>) => Record<string, unknown>[];
   details?: (id: string, params: Record<string, any>) => Record<string, unknown>;

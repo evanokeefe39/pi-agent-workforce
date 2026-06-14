@@ -101,7 +101,7 @@ export default function (pi: ExtensionAPI) {
         description:
           "Record a long-form report with executive summary, sections, and optional recommendations. " +
           "Stores content as a markdown artifact with structured metadata for discovery.",
-        filename: () => "report.md",
+        filename: () => "report.json",
         content: (p) => p.content,
         metadata: (p, sid) => ({
           ...baseContentMeta(p, sid),
@@ -139,7 +139,7 @@ export default function (pi: ExtensionAPI) {
         description:
           "Record a how-to guide or tutorial with steps, prerequisites, and outcome. " +
           "Stores content as a markdown artifact with structured metadata.",
-        filename: () => "guide.md",
+        filename: () => "guide.json",
         content: (p) => p.content,
         metadata: (p, sid) => ({
           ...baseContentMeta(p, sid),
@@ -172,7 +172,7 @@ export default function (pi: ExtensionAPI) {
         label: "Record Article",
         description:
           "Record an editorial article with angle, target platform, and optional SEO metadata.",
-        filename: () => "article.md",
+        filename: () => "article.json",
         content: (p) => p.content,
         metadata: (p, sid) => ({
           ...baseContentMeta(p, sid),
@@ -210,7 +210,7 @@ export default function (pi: ExtensionAPI) {
         description:
           "Record marketing/promotional copy for a specific platform with a call-to-action and optional variants. " +
           "Source refs are optional for marketing copy.",
-        filename: () => "marketing_copy.md",
+        filename: () => "marketing_copy.json",
         content: (p) => p.content,
         metadata: (p, sid) => ({
           ...baseContentMeta(p, sid),
@@ -248,7 +248,7 @@ export default function (pi: ExtensionAPI) {
         label: "Record Newsletter",
         description:
           "Record a newsletter issue with cadence, sections, and featured content references.",
-        filename: () => "newsletter.md",
+        filename: () => "newsletter.json",
         content: (p) => p.content,
         metadata: (p, sid) => ({
           ...baseContentMeta(p, sid),

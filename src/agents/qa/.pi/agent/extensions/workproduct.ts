@@ -230,7 +230,7 @@ export default function (pi: ExtensionAPI) {
           "Captures verdict (pass|fail|escalate), the standards applied, " +
           "a named-check boolean checklist, severity metrics, a narrative " +
           "verdict, and optional structured findings list.",
-        filename: () => "artifact_review.md",
+        filename: () => "artifact_review.json",
         content: (p) => {
           const findings = p.findings ?? [];
           return `${p.verdict_text}\n\n## Findings\n${JSON.stringify(findings, null, 2)}`;
@@ -286,7 +286,7 @@ export default function (pi: ExtensionAPI) {
           "Record a QA verdict on a proposed plan or specification. " +
           "Captures the spec-gate checklist, a risk inventory with mitigations, " +
           "optional feasibility score, unresolved questions, and conditional gating.",
-        filename: () => "plan_review.md",
+        filename: () => "plan_review.json",
         content: (p) =>
           `${p.review_text}\n\n## Risks\n${JSON.stringify(p.risk_inventory, null, 2)}`,
         metadata: (p, sid) => ({
@@ -340,7 +340,7 @@ export default function (pi: ExtensionAPI) {
           "Record a QA verdict on a stage-to-stage handoff. " +
           "Lists input artifacts crossing the gate, named gate criteria as pass/fail, " +
           "and any blocking issues that must be resolved before the gate can pass.",
-        filename: () => "stage_gate.md",
+        filename: () => "stage_gate.json",
         content: (p) => {
           const blocking = p.blocking_issues ?? [];
           return `${p.gate_text}\n\n## Blocking issues\n${JSON.stringify(blocking, null, 2)}`;
