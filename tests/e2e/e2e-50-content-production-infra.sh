@@ -269,9 +269,10 @@ fi
 
 # D5: Dockerfile coder-deps stage with chromium + rendering deps
 D5_PASS=true
+CODER_DEPS_PKG="$AGENTS/coder-deps/package.json"
 grep -q "coder-deps" "$DOCKERFILE" 2>/dev/null || D5_PASS=false
 grep -q "chromium" "$DOCKERFILE" 2>/dev/null || D5_PASS=false
-grep -q "playwright-core" "$DOCKERFILE" 2>/dev/null || D5_PASS=false
+grep -q "playwright-core" "$CODER_DEPS_PKG" 2>/dev/null || D5_PASS=false
 if [ "$D5_PASS" = true ]; then
   pass "D5: Dockerfile has coder-deps stage with chromium + playwright"
 else
